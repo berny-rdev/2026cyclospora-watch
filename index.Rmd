@@ -11,7 +11,7 @@ output:
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 required_pkgs <- c("googlesheets4", "dplyr", "tidyr", "stringr", "lubridate",
-                    "ggplot2", "janitor", "purrr", "knitr", "DT", "httr2", "jsonlite", "usmap")
+                    "ggplot2", "janitor", "purrr", "knitr", "DT", "httr2", "jsonlite", "maps")
 new_pkgs <- required_pkgs[!(required_pkgs %in% installed.packages()[, "Package"])]
 if (length(new_pkgs)) install.packages(new_pkgs)
 library(googlesheets4); library(dplyr); library(tidyr); library(stringr)
@@ -47,7 +47,15 @@ match_columns <- function(actual_names, signatures) {
 # Seed dictionaries - starting point + offline fallback only. The real,
 # growing vocabulary lives in category_vocabulary.json (see below).
 produce_dict_seed <- list(
-  lettuce = "lettuce|romaine|iceberg|spring mix|spinach mix|leafy green",
+  # Lettuce is split into whole-head vs prepackaged/bagged - this
+  # distinction matters a lot for traceback (prepackaged/bagged salad is
+  # the recurring outbreak vehicle, whole heads much less so), so we keep
+  # them as separate categories rather than merging into one "lettuce".
+  romaine_head        = "romaine.*head|head.*romaine|whole romaine",
+  romaine_prepackaged = "romaine.*(prepackag|bagged)|bagged romaine",
+  iceberg_head        = "iceberg.*head|head.*iceberg|whole iceberg",
+  iceberg_prepackaged = "iceberg.*(prepackag|bagged)|bagged iceberg",
+  mesclun_spring_mix  = "mesclun|spring mix",
   spinach = "spinach", cilantro = "cilantro|coriander", basil = "\\bbasil\\b",
   parsley = "parsley", raspberries = "raspberr", strawberries = "strawberr",
   blackberries = "blackberr", cucumber = "cucumber", tomato = "tomato",
@@ -56,7 +64,12 @@ produce_dict_seed <- list(
   melon = "cantaloupe|honeydew|melon", bell_pepper = "bell pepper|sweet pepper",
   avocado = "avocado|guacamole", celery = "celery", cauliflower = "cauliflower",
   dill = "\\bdill\\b", radish = "radish",
-  mint = "\\bmint\\b", salad_bagged = "bagged salad|salad kit|salad mix",
+  mint = "\\bmint\\b",
+  # Generic bagged/premade salad where the specific lettuce type isn't
+  # named - catches free-text synonyms like "premade salad", "pre-made
+  # side salad", "grab and go salad" so they land here instead of
+  # spawning a near-duplicate category.
+  salad_bagged = "bagged salad|salad kit|salad mix|premade salad|pre-made salad|pre made salad|ready.to.eat salad|grab.and.go salad",
   salad_restaurant = "restaurant salad|salad bar"
 )
 
@@ -70,7 +83,11 @@ store_dict_seed <- list(
 )
 
 baseline_commonness_seed <- c(
-  lettuce = 55, spinach = 25, cilantro = 20, basil = 10, parsley = 12,
+  # Old single "lettuce" baseline (55) split across the new granular
+  # categories - rough guesses, tune as you like.
+  romaine_head = 15, romaine_prepackaged = 20, iceberg_head = 10,
+  iceberg_prepackaged = 12, mesclun_spring_mix = 8,
+  spinach = 25, cilantro = 20, basil = 10, parsley = 12,
   raspberries = 10, strawberries = 30, blackberries = 8, cucumber = 30,
   tomato = 45, snap_peas = 8, green_onion = 20, cabbage = 15, carrot = 40,
   broccoli = 35, melon = 20, bell_pepper = 30, avocado = 35, celery = 15,
@@ -133,12 +150,19 @@ call_claude_classify_dynamic <- function(items, known_categories, domain = c("pr
     paste0(
       "1. If it clearly matches an EXISTING category, use that EXACT category name - do not ",
       "create a near-duplicate or synonym (e.g. don't make \"fresh_cilantro\" if \"cilantro\" ",
-      "already exists).\n",
-      "2. If it genuinely doesn't fit any existing category, invent ONE new concise category ",
+      "already exists, or \"pre_made_salad\" if \"salad_bagged\" already exists - these describe ",
+      "the same thing).\n",
+      "2. For lettuce/salad specifically, PRESERVE the distinction between whole-head produce ",
+      "(e.g. \"romaine_head\", \"iceberg_head\") and prepackaged/bagged forms (e.g. ",
+      "\"romaine_prepackaged\", \"iceberg_prepackaged\", \"salad_bagged\") when the respondent's ",
+      "answer indicates which form it was - this distinction matters for outbreak traceback. If ",
+      "the form isn't specified and it's a generic mixed salad, use the existing generic ",
+      "\"salad_bagged\" category rather than inventing a new one.\n",
+      "3. If it genuinely doesn't fit any existing category, invent ONE new concise category ",
       "name in lowercase_snake_case (1-3 words, e.g. \"purslane\" or \"bean_sprouts\") that ",
       "could sensibly apply to future similar items too. Do NOT use \"other\" - always pick or ",
       "create a real, specific category.\n",
-      "3. If multiple items in this batch describe the same new food, give them the SAME new ",
+      "4. If multiple items in this batch describe the same new food, give them the SAME new ",
       "category name.\n"
     )
   } else {
@@ -349,7 +373,7 @@ produce_signal <- produce_freq %>%
 # Feeling sick or have a confirmed case of cyclospora? [Submit your report here](https://forms.gle/QxB54kJSZV4cCFzQ6)
 
 **`r n_total`** responses collected so far. This is a self-reported, crowdsourced
-tracker meant to try to spot patterns
+tracker built to try to spot patterns
 in the current multistate cyclospora outbreak — **not** an official CDC or
 state health department investigation. There is no control group, so results
 below are proportional reporting among people who got sick, not proof of cause.
@@ -414,10 +438,20 @@ if ("state" %in% names(df)) {
     count(state, name = "n_cases")
 
   if (nrow(state_counts) > 0) {
-    usmap::plot_usmap(data = state_counts, values = "n_cases", color = "white") +
+    # Using the base "maps" package instead of usmap/sf - pure data, no
+    # compiled system libraries required, so this can't break the same
+    # way again. Trade-off: contiguous 48 states only (no AK/HI/DC as
+    # separate shapes) - acceptable for this use case.
+    us_states <- map_data("state")
+    map_df <- us_states %>%
+      left_join(state_counts %>% mutate(region = str_to_lower(state)), by = "region")
+
+    ggplot(map_df, aes(long, lat, group = group, fill = n_cases)) +
+      geom_polygon(color = "white", linewidth = 0.2) +
       scale_fill_continuous(low = "#fde8e6", high = "#c0392b", name = "Self-reported cases", na.value = "gray95") +
-      theme(legend.position = "right") +
-      labs(title = "Self-Reported Cases by State")
+      coord_fixed(1.3) +
+      theme_void() +
+      labs(title = "Self-Reported Cases by State (contiguous 48 states)")
   } else {
     cat("*No state data could be matched yet.*")
   }
