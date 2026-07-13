@@ -340,7 +340,7 @@ CLASSIFICATION_METHOD <- "llm"   # "llm" (recommended) or "regex" (free, no API 
 ## will classify essentially perfectly since they're already exact
 ## category-shaped text (e.g. "Fresh basil", "Snow peas").
 produce_combined <- if (all(c("produce_checklist", "produce_other") %in% names(df))) {
-  paste(coalesce(df$produce_checklist, ""), coalesce(df$produce_other, ""), sep = ", ")
+  paste(coalesce(as.character(df$produce_checklist), ""), coalesce(as.character(df$produce_other), ""), sep = ", ")
 } else if ("produce_checklist" %in% names(df)) {
   df$produce_checklist
 } else if ("produce_other" %in% names(df)) {
