@@ -48,7 +48,8 @@ col_signatures <- c(
   produce_other    = "anything else you remember eating",
   shop_raw         = "shop.?dine",
   duration         = "how long did symptoms last",
-  onset_date       = "when did symptoms start"
+  onset_date       = "when did symptoms start",
+  high_confidence_meal = "fairly confident caused this"
 )
 
 match_columns <- function(actual_names, signatures) {
@@ -185,7 +186,8 @@ regex_classify <- function(item, dict) {
 ## call fails for any reason - the pipeline never crashes either way.
 ## Returns list(mapping = named vector item->category, vocab = updated
 ## character vector of all known categories after this batch).
-classify_items_dynamic <- function(items, known_categories, dict, method = c("llm", "regex")) {
+classify_items_dynamic <- function(items, known_categories, dict, domain = c("produce", "store"), method = c("llm", "regex")) {
+  domain <- match.arg(domain)
   method <- match.arg(method)
   if (length(items) == 0) return(list(mapping = character(0), vocab = known_categories))
 
@@ -194,7 +196,7 @@ classify_items_dynamic <- function(items, known_categories, dict, method = c("ll
     return(list(mapping = mapping, vocab = union(known_categories, unique(mapping))))
   }
 
-  result <- call_claude_classify_dynamic(items, known_categories)
+  result <- call_claude_classify_dynamic(items, known_categories, domain = domain)
   if (is.null(result) || length(result) == 0) {
     warning("LLM classification failed - falling back to regex dictionary for this batch.")
     mapping <- setNames(map_chr(items, ~ regex_classify(.x, dict)), items)
@@ -214,14 +216,55 @@ classify_items_dynamic <- function(items, known_categories, dict, method = c("ll
   list(mapping = mapping, vocab = union(known_categories, unique(mapping)))
 }
 
-call_claude_classify_dynamic <- function(items, known_categories,
+call_claude_classify_dynamic <- function(items, known_categories, domain = c("produce", "store"),
                                           api_key = Sys.getenv("ANTHROPIC_API_KEY"),
                                           model = "claude-haiku-4-5-20251001") {
+  domain <- match.arg(domain)
   if (identical(api_key, "")) {
     warning("ANTHROPIC_API_KEY not set - falling back to regex classification.")
     return(NULL)
   }
   if (length(items) == 0) return(NULL)
+
+  ## PRODUCE and STORE need opposite classification instincts:
+  ## - Produce: GENERALIZE. "romaine" and "bagged lettuce" should both
+  ##   become "lettuce" - that's the whole point of the category system.
+  ## - Store/restaurant: NEVER generalize into a business-type bucket like
+  ##   "regional_grocery" or "fast_casual" - that destroys the one thing
+  ##   that matters for a traceback (which SPECIFIC place was it). Only
+  ##   merge spelling/phrasing variants of the SAME named place.
+  domain_instructions <- if (domain == "produce") {
+    paste0(
+      "1. If it clearly matches an EXISTING category, use that EXACT category name - do not ",
+      "create a near-duplicate or synonym (e.g. don't make \"fresh_cilantro\" if \"cilantro\" ",
+      "already exists).\n",
+      "2. If it genuinely doesn't fit any existing category, invent ONE new concise category ",
+      "name in lowercase_snake_case (1-3 words, e.g. \"purslane\" or \"bean_sprouts\") that ",
+      "could sensibly apply to future similar items too. Do NOT use \"other\" - always pick or ",
+      "create a real, specific category.\n",
+      "3. If multiple items in this batch describe the same new food, give them the SAME new ",
+      "category name.\n"
+    )
+  } else {
+    paste0(
+      "1. Your ONLY job is to normalize SPELLING/PHRASING variants of the SAME specific named ",
+      "place into one category (e.g. \"Krogers\", \"the kroger on main\", \"kroger grocery\" all ",
+      "become \"kroger\"). If an EXISTING category is clearly the same specific place, use that ",
+      "EXACT category name.\n",
+      "2. NEVER invent a generic business-type category like \"regional_grocery\", ",
+      "\"casual_dining\", \"fast_casual\", \"grocery_store\", or \"local_restaurant\" - these hide ",
+      "the actual place and are USELESS for a foodborne illness traceback, which requires ",
+      "knowing exactly which specific establishment was involved.\n",
+      "3. If the item names any identifiable specific business, chain, or restaurant (even a ",
+      "small independent one you don't otherwise know), use a lowercase_snake_case version of ",
+      "THAT EXACT NAME as the category (e.g. \"harris_teeter\", \"joes_pizza_downtown\"). Do not ",
+      "abstract it into a category of business.\n",
+      "4. ONLY if the respondent's answer truly contains NO identifiable name at all (e.g. they ",
+      "wrote just \"a restaurant\" or \"the grocery store\" with zero distinguishing details) use ",
+      "exactly \"unspecified_restaurant\" or \"unspecified_grocery_store\" - do not invent any ",
+      "other generic bucket beyond these two exact fallback labels.\n"
+    )
+  }
 
   prompt <- paste0(
     "You are maintaining a GROWING category taxonomy for a citizen-science foodborne ",
@@ -229,15 +272,7 @@ call_claude_classify_dynamic <- function(items, known_categories,
     "\"idk maybe romaine?\", \"bagged salad mix i think\").\n\n",
     "Categories that ALREADY EXIST: ", paste(known_categories, collapse = ", "), "\n\n",
     "For each item below:\n",
-    "1. If it clearly matches an EXISTING category, use that EXACT category name - do not ",
-    "create a near-duplicate or synonym (e.g. don't make \"fresh_cilantro\" if \"cilantro\" ",
-    "already exists).\n",
-    "2. If it genuinely doesn't fit any existing category, invent ONE new concise category ",
-    "name in lowercase_snake_case (1-3 words, e.g. \"purslane\" or \"bean_sprouts\") that ",
-    "could sensibly apply to future similar items too. Do NOT use \"other\" - always pick or ",
-    "create a real, specific category.\n",
-    "3. If multiple items in this batch describe the same new food, give them the SAME new ",
-    "category name.\n\n",
+    domain_instructions, "\n",
     "Respond with ONLY a raw JSON object mapping each exact input item (as written, as the ",
     "key) to its category (as the value). No prose, no markdown code fences.\n\nItems:\n",
     paste0("- ", items, collapse = "\n")
@@ -271,11 +306,11 @@ call_claude_classify_dynamic <- function(items, known_categories,
 ## Classifies free text AND grows the vocabulary in one step. Returns
 ## list(long = long-format dataframe with categories, vocab = updated
 ## character vector of categories to feed back into the vocabulary object).
-classify_and_grow <- function(raw_text_vec, known_categories, dict, method = "llm") {
+classify_and_grow <- function(raw_text_vec, known_categories, dict, domain = "produce", method = "llm") {
   long <- split_freetext(raw_text_vec)
   if (nrow(long) == 0) return(list(long = long %>% mutate(category = character(0)), vocab = known_categories))
   distinct_items <- unique(long$item)
-  result <- classify_items_dynamic(distinct_items, known_categories, dict, method = method)
+  result <- classify_items_dynamic(distinct_items, known_categories, dict, domain = domain, method = method)
   list(long = long %>% mutate(category = unname(result$mapping[item])), vocab = result$vocab)
 }
 
@@ -350,7 +385,7 @@ produce_combined <- if (all(c("produce_checklist", "produce_other") %in% names(d
 }
 
 if (!is.null(produce_combined)) {
-  produce_result <- classify_and_grow(produce_combined, vocab$produce_categories, produce_dict_seed, method = CLASSIFICATION_METHOD)
+  produce_result <- classify_and_grow(produce_combined, vocab$produce_categories, produce_dict_seed, domain = "produce", method = CLASSIFICATION_METHOD)
   produce_long <- produce_result$long %>% mutate(response_id = row_id, .keep = "unused")
   vocab$produce_categories <- produce_result$vocab
 } else {
@@ -358,7 +393,7 @@ if (!is.null(produce_combined)) {
 }
 
 if ("shop_raw" %in% names(df)) {
-  store_result <- classify_and_grow(df$shop_raw, vocab$store_categories, store_dict_seed, method = CLASSIFICATION_METHOD)
+  store_result <- classify_and_grow(df$shop_raw, vocab$store_categories, store_dict_seed, domain = "store", method = CLASSIFICATION_METHOD)
   store_long <- store_result$long %>% mutate(response_id = row_id, .keep = "unused")
   vocab$store_categories <- store_result$vocab
 } else {
@@ -494,6 +529,25 @@ if ("onset_date" %in% names(df)) {
   } else if (n_total > 0) {
     message("onset_date column found but no dates parsed. Run `print(df$onset_date)` ",
             "to see the raw values and add that format to the `orders` vector above.")
+  }
+}
+
+## ---- 7b. HIGH-CONFIDENCE INDIVIDUAL REPORTS (anecdotal, NOT aggregated) ---
+## A small number of people may have strong, specific recall about what
+## caused their illness. These are valuable as human-readable leads for
+## whoever's investigating, but must NEVER be folded into the aggregate
+## signal-ratio math above - one confident person's guess shouldn't move
+## a population-level statistic. Kept as a raw, unclassified list instead.
+
+if ("high_confidence_meal" %in% names(df)) {
+  high_confidence_reports <- df %>%
+    filter(!is.na(high_confidence_meal), str_trim(as.character(high_confidence_meal)) != "") %>%
+    select(any_of(c("state", "onset_date", "high_confidence_meal")))
+
+  if (nrow(high_confidence_reports) > 0) {
+    cat("\n===== HIGH-CONFIDENCE INDIVIDUAL REPORTS (anecdotal - not part of aggregate stats) =====\n")
+    print(kable(high_confidence_reports, caption = "Individual high-confidence suspected meals"))
+    write.csv(high_confidence_reports, "high_confidence_reports.csv", row.names = FALSE)
   }
 }
 
