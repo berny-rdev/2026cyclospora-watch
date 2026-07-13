@@ -21,18 +21,19 @@ library(knitr); library(DT)
 
 ```{r config}
 # ---- EDIT THIS SECTION FOR YOUR FORM ----
-SHEET_URL <- "https://docs.google.com/spreadsheets/d/1n1VJ99Ko7mvFQmKRX_QrFLFFziMAGKpkUNmK40QxLpU/edit?usp=sharing"
+SHEET_URL <- "PASTE_YOUR_GOOGLE_SHEET_URL_HERE"
 gs4_deauth()
 
 col_signatures <- c(
-  timestamp   = "^timestamp$",
-  consent     = "consent",
-  state       = "what state",
-  why_believe = "why do you believe",
-  produce_raw = "raw produce",
-  shop_raw    = "shop.?dine",
-  duration    = "how long did symptoms last",
-  onset_date  = "when did symptoms start"
+  timestamp        = "^timestamp$",
+  consent          = "consent",
+  state            = "what state",
+  why_believe      = "why do you believe",
+  produce_checklist = "did you eat any of the following",
+  produce_other    = "anything else you remember eating",
+  shop_raw         = "shop.?dine",
+  duration         = "how long did symptoms last",
+  onset_date       = "when did symptoms start"
 )
 
 match_columns <- function(actual_names, signatures) {
@@ -53,7 +54,8 @@ produce_dict_seed <- list(
   snap_peas = "snap pea|sugar snap", green_onion = "green onion|scallion|spring onion",
   cabbage = "cabbage|slaw", carrot = "carrot", broccoli = "broccoli",
   melon = "cantaloupe|honeydew|melon", bell_pepper = "bell pepper|sweet pepper",
-  avocado = "avocado|guacamole", celery = "celery", radish = "radish",
+  avocado = "avocado|guacamole", celery = "celery", cauliflower = "cauliflower",
+  dill = "\\bdill\\b", radish = "radish",
   mint = "\\bmint\\b", salad_bagged = "bagged salad|salad kit|salad mix",
   salad_restaurant = "restaurant salad|salad bar"
 )
@@ -72,6 +74,7 @@ baseline_commonness_seed <- c(
   raspberries = 10, strawberries = 30, blackberries = 8, cucumber = 30,
   tomato = 45, snap_peas = 8, green_onion = 20, cabbage = 15, carrot = 40,
   broccoli = 35, melon = 20, bell_pepper = 30, avocado = 35, celery = 15,
+  cauliflower = 15, dill = 8,
   radish = 6, mint = 5, salad_bagged = 25, salad_restaurant = 20
 )
 
@@ -202,8 +205,18 @@ duration_summary <- if ("duration" %in% names(df)) {
 
 vocab <- load_vocabulary(VOCAB_PATH, names(produce_dict_seed), names(store_dict_seed), baseline_commonness_seed)
 
-if ("produce_raw" %in% names(df)) {
-  produce_result <- classify_and_grow(df$produce_raw, vocab$produce_categories, produce_dict_seed, method = CLASSIFICATION_METHOD)
+produce_combined <- if (all(c("produce_checklist", "produce_other") %in% names(df))) {
+  paste(coalesce(df$produce_checklist, ""), coalesce(df$produce_other, ""), sep = ", ")
+} else if ("produce_checklist" %in% names(df)) {
+  df$produce_checklist
+} else if ("produce_other" %in% names(df)) {
+  df$produce_other
+} else {
+  NULL
+}
+
+if (!is.null(produce_combined)) {
+  produce_result <- classify_and_grow(produce_combined, vocab$produce_categories, produce_dict_seed, method = CLASSIFICATION_METHOD)
   produce_long <- produce_result$long %>% mutate(response_id = row_id, .keep = "unused")
   vocab$produce_categories <- produce_result$vocab
 } else {
