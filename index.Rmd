@@ -11,7 +11,7 @@ output:
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 required_pkgs <- c("googlesheets4", "dplyr", "tidyr", "stringr", "lubridate",
-                    "ggplot2", "janitor", "purrr", "knitr", "DT", "httr2", "jsonlite")
+                    "ggplot2", "janitor", "purrr", "knitr", "DT", "httr2", "jsonlite", "usmap")
 new_pkgs <- required_pkgs[!(required_pkgs %in% installed.packages()[, "Package"])]
 if (length(new_pkgs)) install.packages(new_pkgs)
 library(googlesheets4); library(dplyr); library(tidyr); library(stringr)
@@ -88,7 +88,12 @@ load_vocabulary <- function(path, seed_produce, seed_store, seed_baseline) {
     baseline_commonness = modifyList(
       as.list(seed_baseline),
       if (!is.null(v) && !is.null(v$baseline_commonness)) as.list(v$baseline_commonness) else list()
-    )
+    ),
+    # PERSISTENT CLASSIFICATION CACHE - locks in each specific raw phrase's
+    # decision forever, so already-classified responses can't silently
+    # drift to a different category on a later run.
+    produce_item_map = if (!is.null(v) && !is.null(v$produce_item_map)) as.list(v$produce_item_map) else list(),
+    store_item_map    = if (!is.null(v) && !is.null(v$store_item_map)) as.list(v$store_item_map) else list()
   )
 }
 
@@ -202,12 +207,37 @@ classify_items_dynamic <- function(items, known_categories, dict, domain = c("pr
   list(mapping = mapping, vocab = union(known_categories, unique(mapping)))
 }
 
-classify_and_grow <- function(raw_text_vec, known_categories, dict, domain = "produce", method = "llm") {
+## Classifies free text AND grows the vocabulary in one step - CACHE-FIRST:
+## any raw phrase already decided in a previous run gets its locked-in
+## answer from item_map, no LLM call, no chance of drifting to a
+## different answer. Only phrases genuinely never seen before go to the
+## LLM, and that one-time decision gets saved into item_map permanently.
+classify_and_grow <- function(raw_text_vec, known_categories, item_map, dict, domain = "produce", method = "llm") {
   long <- split_freetext(raw_text_vec)
-  if (nrow(long) == 0) return(list(long = long %>% mutate(category = character(0)), vocab = known_categories))
+  if (nrow(long) == 0) return(list(long = long %>% mutate(category = character(0)), vocab = known_categories, item_map = item_map))
+
   distinct_items <- unique(long$item)
-  result <- classify_items_dynamic(distinct_items, known_categories, dict, domain = domain, method = method)
-  list(long = long %>% mutate(category = unname(result$mapping[item])), vocab = result$vocab)
+
+  cached_category <- vapply(distinct_items, function(it) {
+    val <- item_map[[it]]
+    if (is.null(val)) NA_character_ else as.character(val)
+  }, character(1))
+  names(cached_category) <- distinct_items
+
+  uncached_items <- distinct_items[is.na(cached_category)]
+
+  if (length(uncached_items) > 0) {
+    result <- classify_items_dynamic(uncached_items, known_categories, dict, domain = domain, method = method)
+    known_categories <- result$vocab
+    cached_category[uncached_items] <- result$mapping[uncached_items]
+    for (it in uncached_items) item_map[[it]] <- unname(cached_category[[it]])
+  }
+
+  list(
+    long = long %>% mutate(category = unname(cached_category[item])),
+    vocab = known_categories,
+    item_map = item_map
+  )
 }
 ```
 
@@ -247,17 +277,19 @@ produce_combined <- if (all(c("produce_checklist", "produce_other") %in% names(d
 }
 
 if (!is.null(produce_combined)) {
-  produce_result <- classify_and_grow(produce_combined, vocab$produce_categories, produce_dict_seed, domain = "produce", method = CLASSIFICATION_METHOD)
+  produce_result <- classify_and_grow(produce_combined, vocab$produce_categories, vocab$produce_item_map, produce_dict_seed, domain = "produce", method = CLASSIFICATION_METHOD)
   produce_long <- produce_result$long %>% mutate(response_id = row_id, .keep = "unused")
   vocab$produce_categories <- produce_result$vocab
+  vocab$produce_item_map <- produce_result$item_map
 } else {
   produce_long <- tibble()
 }
 
 if ("shop_raw" %in% names(df)) {
-  store_result <- classify_and_grow(df$shop_raw, vocab$store_categories, store_dict_seed, domain = "store", method = CLASSIFICATION_METHOD)
+  store_result <- classify_and_grow(df$shop_raw, vocab$store_categories, vocab$store_item_map, store_dict_seed, domain = "store", method = CLASSIFICATION_METHOD)
   store_long <- store_result$long %>% mutate(response_id = row_id, .keep = "unused")
   vocab$store_categories <- store_result$vocab
+  vocab$store_item_map <- store_result$item_map
 } else {
   store_long <- tibble()
 }
@@ -305,9 +337,8 @@ produce_signal <- produce_freq %>%
     signal_ratio_low = round(ci_low_pct / baseline_pct, 2),
     signal_ratio_high = round(ci_high_pct / baseline_pct, 2)
   ) %>%
-  # Sort by the CONSERVATIVE (lower-bound CI) ratio, not the raw point
-  # estimate - discounts small-n flukes, rewards foods elevated even
-  # under the pessimistic estimate.
+  # Sort by conservative lower-bound ratio, not the raw point estimate -
+  # discounts small-n flukes, rewards foods elevated even pessimistically.
   arrange(desc(signal_ratio_low), desc(signal_ratio))
 ```
 
@@ -318,7 +349,7 @@ produce_signal <- produce_freq %>%
 # Feeling sick or have a confirmed case of cyclospora? [Submit your report here](https://forms.gle/QxB54kJSZV4cCFzQ6)
 
 **`r n_total`** responses collected so far. This is a self-reported, crowdsourced
-tracker built by a very fed up public health enthusiast trying to spot patterns
+tracker meant to try to spot patterns
 in the current multistate cyclospora outbreak — **not** an official CDC or
 state health department investigation. There is no control group, so results
 below are proportional reporting among people who got sick, not proof of cause.
@@ -337,6 +368,10 @@ datatable(produce_signal, rownames = FALSE,
           options = list(pageLength = 10, order = list(list(7, "desc"))))
 ```
 
+*CI columns are a 95% confidence interval — small sample sizes mean wide
+ranges. If the "Ratio CI low" column is still above 1, that's a stronger
+lead than the point estimate alone.*
+
 ```{r produce-signal-plot, fig.width=9, fig.height=6}
 produce_signal %>%
   filter(n_cases >= 3) %>%
@@ -345,7 +380,8 @@ produce_signal %>%
   geom_errorbar(aes(ymin = signal_ratio_low, ymax = signal_ratio_high), width = 0.3, color = "gray30") +
   geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
   coord_flip() +
-  labs(title = "Produce Signal Ratio", x = NULL, y = "Signal ratio (case % / baseline %)") +
+  labs(title = "Produce Signal Ratio", subtitle = "Bars = point estimate, whiskers = 95% CI",
+       x = NULL, y = "Signal ratio (case % / baseline %)") +
   theme_minimal(base_size = 13)
 ```
 
@@ -356,6 +392,41 @@ datatable(produce_freq, rownames = FALSE,
           colnames = c("Food", "# cases", "% of cases", "CI low", "CI high"),
           options = list(pageLength = 10))
 ```
+
+## Cases by state
+
+```{r state-map, fig.width=9, fig.height=6}
+if ("state" %in% names(df)) {
+  normalize_state <- function(x) {
+    x <- str_trim(x)
+    full_match <- state.name[match(str_to_title(x), state.name)]
+    abbr_match <- state.name[match(str_to_upper(x), state.abb)]
+    dc_match <- ifelse(
+      str_to_lower(x) %in% c("dc", "washington dc", "washington, dc", "district of columbia"),
+      "District of Columbia", NA_character_
+    )
+    coalesce(full_match, abbr_match, dc_match)
+  }
+
+  state_counts <- df %>%
+    mutate(state = normalize_state(state)) %>%
+    filter(!is.na(state)) %>%
+    count(state, name = "n_cases")
+
+  if (nrow(state_counts) > 0) {
+    usmap::plot_usmap(data = state_counts, values = "n_cases", color = "white") +
+      scale_fill_continuous(low = "#fde8e6", high = "#c0392b", name = "Self-reported cases", na.value = "gray95") +
+      theme(legend.position = "right") +
+      labs(title = "Self-Reported Cases by State")
+  } else {
+    cat("*No state data could be matched yet.*")
+  }
+}
+```
+
+*This is a representation of the cases that have been self-reported in
+this survey. For the official case count, please refer to the CDC or
+your relevant state/local health department.*
 
 ## Stores & restaurants mentioned
 
