@@ -21,7 +21,7 @@ library(knitr); library(DT)
 
 ```{r config}
 # ---- EDIT THIS SECTION FOR YOUR FORM ----
-SHEET_URL <- "PASTE_YOUR_GOOGLE_SHEET_URL_HERE"
+SHEET_URL <- "https://docs.google.com/spreadsheets/d/1n1VJ99Ko7mvFQmKRX_QrFLFFziMAGKpkUNmK40QxLpU/edit?usp=sharing"
 gs4_deauth()
 
 col_signatures <- c(
