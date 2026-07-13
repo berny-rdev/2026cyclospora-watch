@@ -73,7 +73,9 @@
     "and onions": "onions",
     "lettuce served on side of mexican food": "lettuce",
     "romaine lettuce (head)": "romaine_head",
-    "romaine lettuce (prepackaged)": "romaine_prepackaged"
+    "romaine lettuce (prepackaged)": "romaine_prepackaged",
+    "iceberg lettuce (prepackaged)": "iceberg_prepackaged",
+    "taco bell": "tacos"
   },
   "store_item_map": {
     "kroger": "kroger",
@@ -101,6 +103,7 @@
     "food lion grocery store": "food_lion",
     "mcdonalds": "mcdonalds",
     "acme": "acme",
-    "chipotle": "chipotle"
+    "chipotle": "chipotle",
+    "publix": "publix"
   }
 }
