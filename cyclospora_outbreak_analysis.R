@@ -376,18 +376,44 @@ if (length(categories_missing_baseline)) {
 }
 
 ## ---- 5. FREQUENCY ANALYSIS (case-only "proportional reporting" ranking) --
+## Includes a 95% Wilson score confidence interval on each proportion - a
+## food reported by 100% of cases means very different things at n=2 vs
+## n=50, and the CI makes that visible instead of hiding it behind a
+## single misleadingly precise-looking percentage. Wilson (not the naive
+## normal-approximation interval) because it stays sane even for small n
+## and proportions near 0% or 100%, which is exactly the regime a young
+## crowdsourced dataset lives in. Base R only, no extra package needed.
+
+wilson_ci <- function(x, n, conf_level = 0.95) {
+  if (n == 0) return(c(lower = NA_real_, upper = NA_real_))
+  p_hat <- x / n
+  z <- qnorm(1 - (1 - conf_level) / 2)
+  denom <- 1 + z^2 / n
+  center <- p_hat + z^2 / (2 * n)
+  adj <- z * sqrt((p_hat * (1 - p_hat) + z^2 / (4 * n)) / n)
+  c(lower = max(0, (center - adj) / denom), upper = min(1, (center + adj) / denom))
+}
+
+add_wilson_ci <- function(freq_df, n_total) {
+  ci <- purrr::map2_dfr(freq_df$n_cases, n_total, ~ as.list(wilson_ci(.x, .y)))
+  freq_df %>%
+    mutate(ci_low_pct = round(ci$lower * 100, 1), ci_high_pct = round(ci$upper * 100, 1))
+}
 
 produce_freq <- produce_long %>%
   distinct(response_id, category) %>%          # count each person once per food even if mentioned twice
   count(category, sort = TRUE, name = "n_cases") %>%
-  mutate(pct_of_cases = round(100 * n_cases / n_total, 1))
+  mutate(pct_of_cases = round(100 * n_cases / n_total, 1)) %>%
+  add_wilson_ci(n_total)
 
 store_freq <- store_long %>%
   distinct(response_id, category) %>%
   count(category, sort = TRUE, name = "n_cases") %>%
-  mutate(pct_of_cases = round(100 * n_cases / n_total, 1))
+  mutate(pct_of_cases = round(100 * n_cases / n_total, 1)) %>%
+  add_wilson_ci(n_total)
 
 cat("\n===== PRODUCE reported by cases, most common first =====\n")
+cat("(ci_low_pct/ci_high_pct = 95% confidence interval on the true % - wide intervals mean small sample, don't over-read them)\n")
 print(kable(produce_freq, caption = "Produce frequency among cases"))
 
 cat("\n===== STORES/RESTAURANTS reported by cases, most common first =====\n")
@@ -398,25 +424,41 @@ print(kable(store_freq, caption = "Store/restaurant frequency among cases"))
 ## above, persisted/growable in category_vocabulary.json). Categories
 ## without a baseline number just don't get a signal ratio - see the
 ## "categories_missing_baseline" message printed in Section 4.
+## signal_ratio_low/high propagate the same Wilson CI through the ratio
+## (dividing the CI bounds on pct_of_cases by the fixed baseline) so you
+## can see the plausible RANGE of the signal, not just a point estimate
+## that looks falsely precise at low n.
 
 produce_signal <- produce_freq %>%
   mutate(baseline_pct = unlist(vocab$baseline_commonness)[category]) %>%
   filter(!is.na(baseline_pct)) %>%
-  mutate(signal_ratio = round(pct_of_cases / baseline_pct, 2)) %>%
-  arrange(desc(signal_ratio))
+  mutate(
+    signal_ratio = round(pct_of_cases / baseline_pct, 2),
+    signal_ratio_low = round(ci_low_pct / baseline_pct, 2),
+    signal_ratio_high = round(ci_high_pct / baseline_pct, 2)
+  ) %>%
+  # Sort by the CONSERVATIVE (lower-bound CI) ratio, not the raw point
+  # estimate - this is the "likely causality" ranking a real epi
+  # investigator would use. A food at 5.0x based on 1 person is a much
+  # weaker lead than a food at 3.75x based on 4 people; ranking by the
+  # low end of the interval automatically discounts small-n flukes and
+  # rewards foods that stay elevated even under the pessimistic estimate.
+  arrange(desc(signal_ratio_low), desc(signal_ratio))
 
 cat("\n===== SIGNAL RATIO: reported-by-cases % vs. typical population baseline % =====\n")
 cat("(ratio well above 1 = shows up in cases way more than you'd expect from normal eating habits - that's your lead list)\n")
+cat("(signal_ratio_low/high = 95% CI range on that ratio - if this range still sits above 1 even at its low end, that's a much stronger lead than a point estimate alone)\n")
 print(kable(produce_signal, caption = "Signal ratio (case % / baseline %)"))
 
 signal_plot <- produce_signal %>%
   filter(n_cases >= 3) %>%   # ignore items only 1-2 people mentioned, too noisy
-  ggplot(aes(x = reorder(category, signal_ratio), y = signal_ratio)) +
+  ggplot(aes(x = reorder(category, signal_ratio_low), y = signal_ratio)) +
   geom_col(fill = "#c0392b") +
+  geom_errorbar(aes(ymin = signal_ratio_low, ymax = signal_ratio_high), width = 0.3, color = "gray30") +
   geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
   coord_flip() +
   labs(title = "Produce Signal Ratio (cases vs. everyday baseline)",
-       subtitle = "Above dashed line = reported by cases more than expected for a normal diet",
+       subtitle = "Bars = point estimate, whiskers = 95% CI. Above dashed line = more than expected for a normal diet.",
        x = NULL, y = "Signal ratio") +
   theme_minimal(base_size = 13)
 
