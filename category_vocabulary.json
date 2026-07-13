@@ -1,6 +1,6 @@
 {
   "produce_categories": ["lettuce", "spinach", "cilantro", "basil", "parsley", "raspberries", "strawberries", "blackberries", "cucumber", "tomato", "snap_peas", "green_onion", "cabbage", "carrot", "broccoli", "melon", "bell_pepper", "avocado", "celery", "radish", "mint", "salad_bagged", "salad_restaurant", "cauliflower", "dill", "cherries", "sushi", "apples", "onions", "corn", "veggie_tray", "stone_fruit", "kiwi", "bananas", "tacos", "romaine_head", "romaine_prepackaged", "iceberg_head", "iceberg_prepackaged", "mesclun_spring_mix"],
-  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant", "harris_teeter", "regional_grocery", "casual_dining", "fast_casual", "unknown_source", "meijer", "texas_roadhouse", "olive_garden", "culvers", "marianos", "unspecified_grocery_store", "chick_fil_a", "unspecified_restaurant", "big_y", "taylor_farms", "tom_thumb", "sprouts", "lidl", "giant", "food_lion"],
+  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant", "harris_teeter", "regional_grocery", "casual_dining", "fast_casual", "unknown_source", "meijer", "texas_roadhouse", "olive_garden", "culvers", "marianos", "unspecified_grocery_store", "chick_fil_a", "unspecified_restaurant", "big_y", "taylor_farms", "tom_thumb", "sprouts", "lidl", "giant", "food_lion", "acme"],
   "baseline_commonness": {
     "romaine_head": 15,
     "romaine_prepackaged": 20,
@@ -71,7 +71,9 @@
     "broccoli": "broccoli",
     "mcdonalds burger with lettuce": "lettuce",
     "and onions": "onions",
-    "lettuce served on side of mexican food": "lettuce"
+    "lettuce served on side of mexican food": "lettuce",
+    "romaine lettuce (head)": "romaine_head",
+    "romaine lettuce (prepackaged)": "romaine_prepackaged"
   },
   "store_item_map": {
     "kroger": "kroger",
@@ -97,6 +99,8 @@
     "lidl": "lidl",
     "giant": "giant",
     "food lion grocery store": "food_lion",
-    "mcdonalds": "mcdonalds"
+    "mcdonalds": "mcdonalds",
+    "acme": "acme",
+    "chipotle": "chipotle"
   }
 }
