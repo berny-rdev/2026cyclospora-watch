@@ -206,7 +206,7 @@ duration_summary <- if ("duration" %in% names(df)) {
 vocab <- load_vocabulary(VOCAB_PATH, names(produce_dict_seed), names(store_dict_seed), baseline_commonness_seed)
 
 produce_combined <- if (all(c("produce_checklist", "produce_other") %in% names(df))) {
-  paste(coalesce(df$produce_checklist, ""), coalesce(df$produce_other, ""), sep = ", ")
+  paste(coalesce(as.character(df$produce_checklist), ""), coalesce(as.character(df$produce_other), ""), sep = ", ")
 } else if ("produce_checklist" %in% names(df)) {
   df$produce_checklist
 } else if ("produce_other" %in% names(df)) {
