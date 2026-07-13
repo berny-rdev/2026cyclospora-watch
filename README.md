@@ -1,7 +1,7 @@
 # Crowdsourced Cyclospora Watch
 
 A crowdsourced, self-reported tracker for the current multistate cyclospora
-outbreak, built by a group of r/publichealth folks. Not affiliated with CDC
+outbreak, built by a grad student with OCD. Not affiliated with CDC
 or any state health department — this is a hypothesis-generating tool, not
 an official investigation.
 
