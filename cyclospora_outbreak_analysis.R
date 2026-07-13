@@ -29,7 +29,7 @@ library(lubridate); library(ggplot2); library(janitor); library(purrr); library(
 
 ## ---- 1. CONFIG -- EDIT FOR YOUR FORM ----------------------------------
 
-SHEET_URL <- "PASTE_YOUR_GOOGLE_SHEET_URL_HERE"
+SHEET_URL <- "https://docs.google.com/spreadsheets/d/1n1VJ99Ko7mvFQmKRX_QrFLFFziMAGKpkUNmK40QxLpU/edit?usp=sharing"
 gs4_deauth()   # sheet must be "anyone with link can view"; comment out + use gs4_auth() if private
 
 # Google Forms stuffs the ENTIRE question text (including instructions and
