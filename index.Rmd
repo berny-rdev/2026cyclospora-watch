@@ -287,7 +287,7 @@ produce_signal <- produce_freq %>%
 # Feeling sick or have a confirmed case of cyclospora? [Submit your report here](https://forms.gle/QxB54kJSZV4cCFzQ6)
 
 **`r n_total`** responses collected so far. This is a self-reported, crowdsourced
-tracker built by a group of `r "r/publichealth"` folks trying to spot patterns
+tracker built by a very fed up public health enthusiast trying to spot patterns
 in the current multistate cyclospora outbreak — **not** an official CDC or
 state health department investigation. There is no control group, so results
 below are proportional reporting among people who got sick, not proof of cause.
