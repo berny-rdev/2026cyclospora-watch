@@ -257,6 +257,8 @@ produce_signal <- produce_freq %>%
 
 *Last updated: `r format(Sys.time(), "%B %d, %Y at %I:%M %p %Z")`*
 
+# Feeling sick or have a confirmed case of cyclospora? [Submit your report here](https://forms.gle/QxB54kJSZV4cCFzQ6)
+
 **`r n_total`** responses collected so far. This is a self-reported, crowdsourced
 tracker built by a group of `r "r/publichealth"` folks trying to spot patterns
 in the current multistate cyclospora outbreak — **not** an official CDC or
@@ -351,4 +353,4 @@ consistent, the right next step is reporting it to your **local or state
 health department**, who can do formal case-control interviews and trace
 product lots — this page can't do that part.
 
-*Want to add your own report? [Link to your Google Form here].*
+*Want to add your own report? [Fill out the form here](https://forms.gle/6zFfhiaGcw7xHDKa7).*
