@@ -1,0 +1,341 @@
+---
+title: "Crowdsourced Cyclospora Watch"
+output:
+  html_document:
+    theme: flatly
+    toc: false
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+required_pkgs <- c("googlesheets4", "dplyr", "tidyr", "stringr", "lubridate",
+                    "ggplot2", "janitor", "purrr", "knitr", "DT", "httr2", "jsonlite")
+new_pkgs <- required_pkgs[!(required_pkgs %in% installed.packages()[, "Package"])]
+if (length(new_pkgs)) install.packages(new_pkgs)
+library(googlesheets4); library(dplyr); library(tidyr); library(stringr)
+library(lubridate); library(ggplot2); library(janitor); library(purrr)
+library(knitr); library(DT)
+```
+
+```{r config}
+# ---- EDIT THIS SECTION FOR YOUR FORM ----
+SHEET_URL <- "PASTE_YOUR_GOOGLE_SHEET_URL_HERE"
+gs4_deauth()
+
+col_signatures <- c(
+  timestamp   = "^timestamp$",
+  consent     = "consent",
+  state       = "what state",
+  why_believe = "why do you believe",
+  produce_raw = "raw produce",
+  shop_raw    = "shop.?dine",
+  duration    = "how long did symptoms last",
+  onset_date  = "when did symptoms start"
+)
+
+match_columns <- function(actual_names, signatures) {
+  matched <- vapply(signatures, function(sig) {
+    hits <- actual_names[str_detect(str_to_lower(actual_names), str_to_lower(sig))]
+    if (length(hits) == 0) NA_character_ else hits[1]
+  }, character(1))
+  matched[!is.na(matched)]
+}
+
+# Seed dictionaries - starting point + offline fallback only. The real,
+# growing vocabulary lives in category_vocabulary.json (see below).
+produce_dict_seed <- list(
+  lettuce = "lettuce|romaine|iceberg|spring mix|spinach mix|leafy green",
+  spinach = "spinach", cilantro = "cilantro|coriander", basil = "\\bbasil\\b",
+  parsley = "parsley", raspberries = "raspberr", strawberries = "strawberr",
+  blackberries = "blackberr", cucumber = "cucumber", tomato = "tomato",
+  snap_peas = "snap pea|sugar snap", green_onion = "green onion|scallion|spring onion",
+  cabbage = "cabbage|slaw", carrot = "carrot", broccoli = "broccoli",
+  melon = "cantaloupe|honeydew|melon", bell_pepper = "bell pepper|sweet pepper",
+  avocado = "avocado|guacamole", celery = "celery", radish = "radish",
+  mint = "\\bmint\\b", salad_bagged = "bagged salad|salad kit|salad mix",
+  salad_restaurant = "restaurant salad|salad bar"
+)
+
+store_dict_seed <- list(
+  kroger = "kroger", trader_joes = "trader joe", whole_foods = "whole foods",
+  walmart = "wal[- ]?mart", target = "\\btarget\\b", publix = "publix",
+  aldi = "aldi", costco = "costco", safeway = "safeway", wegmans = "wegmans",
+  taco_bell = "taco bell", chipotle = "chipotle", subway = "subway",
+  mcdonalds = "mcdonald", local_farmers_market = "farmers?[- ]?market",
+  local_restaurant = "^restaurant$|local restaurant"
+)
+
+baseline_commonness_seed <- c(
+  lettuce = 55, spinach = 25, cilantro = 20, basil = 10, parsley = 12,
+  raspberries = 10, strawberries = 30, blackberries = 8, cucumber = 30,
+  tomato = 45, snap_peas = 8, green_onion = 20, cabbage = 15, carrot = 40,
+  broccoli = 35, melon = 20, bell_pepper = 30, avocado = 35, celery = 15,
+  radish = 6, mint = 5, salad_bagged = 25, salad_restaurant = 20
+)
+
+VOCAB_PATH <- "category_vocabulary.json"
+
+load_vocabulary <- function(path, seed_produce, seed_store, seed_baseline) {
+  v <- if (file.exists(path)) tryCatch(jsonlite::fromJSON(path, simplifyVector = TRUE), error = function(e) NULL) else NULL
+  list(
+    produce_categories = union(if (!is.null(v)) v$produce_categories else character(0), seed_produce),
+    store_categories   = union(if (!is.null(v)) v$store_categories else character(0), seed_store),
+    baseline_commonness = modifyList(
+      as.list(seed_baseline),
+      if (!is.null(v) && !is.null(v$baseline_commonness)) as.list(v$baseline_commonness) else list()
+    )
+  )
+}
+
+save_vocabulary <- function(vocab, path) {
+  jsonlite::write_json(vocab, path, auto_unbox = TRUE, pretty = TRUE)
+}
+```
+
+```{r functions}
+split_freetext <- function(raw_text_vec) {
+  tibble(row_id = seq_along(raw_text_vec), raw = raw_text_vec) %>%
+    filter(!is.na(raw), str_trim(raw) != "") %>%
+    separate_rows(raw, sep = ",") %>%
+    mutate(item = str_trim(str_to_lower(raw))) %>%
+    filter(item != "")
+}
+
+regex_classify <- function(item, dict) {
+  hit <- names(dict)[map_lgl(dict, ~ str_detect(item, .x))]
+  if (length(hit) == 0) return(str_to_title(item))
+  hit[1]
+}
+
+# LLM does the primary classification and grows the category vocabulary -
+# reuses existing categories where they fit, mints new lowercase_snake_case
+# ones for genuinely new foods instead of dumping them in "other". Falls
+# back to regex automatically if the API call fails.
+CLASSIFICATION_METHOD <- "llm"   # "llm" or "regex"
+
+call_claude_classify_dynamic <- function(items, known_categories, api_key = Sys.getenv("ANTHROPIC_API_KEY"),
+                                          model = "claude-haiku-4-5-20251001") {
+  if (identical(api_key, "") || length(items) == 0) return(NULL)
+  prompt <- paste0(
+    "You are maintaining a GROWING category taxonomy for a citizen-science foodborne ",
+    "illness investigation. Respondents write vague, hedged, or typo'd free text.\n\n",
+    "Categories that ALREADY EXIST: ", paste(known_categories, collapse = ", "), "\n\n",
+    "For each item below:\n",
+    "1. If it clearly matches an EXISTING category, use that EXACT category name - don't ",
+    "create a near-duplicate or synonym.\n",
+    "2. If it genuinely doesn't fit any existing category, invent ONE new concise category ",
+    "name in lowercase_snake_case (1-3 words) that could apply to future similar items too. ",
+    "Do NOT use \"other\" - always pick or create a real, specific category.\n",
+    "3. If multiple items in this batch describe the same new food, give them the SAME new ",
+    "category name.\n\n",
+    "Respond with ONLY a raw JSON object mapping each exact input item (as written, as the ",
+    "key) to its category (as the value). No prose, no markdown code fences.\n\nItems:\n",
+    paste0("- ", items, collapse = "\n")
+  )
+  resp <- tryCatch({
+    httr2::request("https://api.anthropic.com/v1/messages") %>%
+      httr2::req_headers("x-api-key" = api_key, "anthropic-version" = "2023-06-01",
+                          "content-type" = "application/json") %>%
+      httr2::req_body_json(list(model = model, max_tokens = 4096,
+                                 messages = list(list(role = "user", content = prompt)))) %>%
+      httr2::req_perform()
+  }, error = function(e) NULL)
+  if (is.null(resp)) return(NULL)
+  text_out <- str_remove_all(httr2::resp_body_json(resp)$content[[1]]$text, "```json|```")
+  tryCatch(jsonlite::fromJSON(text_out), error = function(e) NULL)
+}
+
+classify_items_dynamic <- function(items, known_categories, dict, method = c("llm", "regex")) {
+  method <- match.arg(method)
+  if (length(items) == 0) return(list(mapping = character(0), vocab = known_categories))
+  if (method == "regex") {
+    mapping <- setNames(map_chr(items, ~ regex_classify(.x, dict)), items)
+    return(list(mapping = mapping, vocab = union(known_categories, unique(mapping))))
+  }
+  result <- call_claude_classify_dynamic(items, known_categories)
+  if (is.null(result) || length(result) == 0) {
+    mapping <- setNames(map_chr(items, ~ regex_classify(.x, dict)), items)
+    return(list(mapping = mapping, vocab = union(known_categories, unique(mapping))))
+  }
+  mapping <- unlist(result)[items]
+  mapping <- str_replace_all(str_to_lower(str_trim(mapping)), "[^a-z0-9]+", "_")
+  mapping <- str_replace_all(mapping, "^_|_$", "")
+  names(mapping) <- items
+  missing <- is.na(mapping) | mapping == ""
+  if (any(missing)) mapping[missing] <- map_chr(items[missing], ~ regex_classify(.x, dict))
+  list(mapping = mapping, vocab = union(known_categories, unique(mapping)))
+}
+
+classify_and_grow <- function(raw_text_vec, known_categories, dict, method = "llm") {
+  long <- split_freetext(raw_text_vec)
+  if (nrow(long) == 0) return(list(long = long %>% mutate(category = character(0)), vocab = known_categories))
+  distinct_items <- unique(long$item)
+  result <- classify_items_dynamic(distinct_items, known_categories, dict, method = method)
+  list(long = long %>% mutate(category = unname(result$mapping[item])), vocab = result$vocab)
+}
+```
+
+```{r load-data}
+raw <- read_sheet(SHEET_URL)
+present_map <- match_columns(names(raw), col_signatures)
+
+df <- raw %>%
+  select(all_of(unname(present_map))) %>%
+  rename(!!!present_map) %>%
+  clean_names() %>%
+  mutate(response_id = row_number())
+
+if ("consent" %in% names(df)) {
+  df <- df %>%
+    filter(str_detect(str_to_lower(str_trim(as.character(consent))), "^yes"))
+}
+
+n_total <- nrow(df)
+
+duration_summary <- if ("duration" %in% names(df)) {
+  df %>%
+    count(duration, sort = TRUE, name = "n_responses") %>%
+    mutate(pct = round(100 * n_responses / n_total, 1))
+} else tibble()
+
+vocab <- load_vocabulary(VOCAB_PATH, names(produce_dict_seed), names(store_dict_seed), baseline_commonness_seed)
+
+if ("produce_raw" %in% names(df)) {
+  produce_result <- classify_and_grow(df$produce_raw, vocab$produce_categories, produce_dict_seed, method = CLASSIFICATION_METHOD)
+  produce_long <- produce_result$long %>% mutate(response_id = row_id, .keep = "unused")
+  vocab$produce_categories <- produce_result$vocab
+} else {
+  produce_long <- tibble()
+}
+
+if ("shop_raw" %in% names(df)) {
+  store_result <- classify_and_grow(df$shop_raw, vocab$store_categories, store_dict_seed, method = CLASSIFICATION_METHOD)
+  store_long <- store_result$long %>% mutate(response_id = row_id, .keep = "unused")
+  vocab$store_categories <- store_result$vocab
+} else {
+  store_long <- tibble()
+}
+
+# Persist the (possibly grown) vocabulary so the next scheduled run reuses
+# these categories instead of starting over. The GitHub Action commits this
+# file alongside index.html.
+save_vocabulary(vocab, VOCAB_PATH)
+
+produce_freq <- produce_long %>%
+  distinct(response_id, category) %>%
+  count(category, sort = TRUE, name = "n_cases") %>%
+  mutate(pct_of_cases = round(100 * n_cases / n_total, 1))
+
+store_freq <- store_long %>%
+  distinct(response_id, category) %>%
+  count(category, sort = TRUE, name = "n_cases") %>%
+  mutate(pct_of_cases = round(100 * n_cases / n_total, 1))
+
+produce_signal <- produce_freq %>%
+  mutate(baseline_pct = unlist(vocab$baseline_commonness)[category]) %>%
+  filter(!is.na(baseline_pct)) %>%
+  mutate(signal_ratio = round(pct_of_cases / baseline_pct, 2)) %>%
+  arrange(desc(signal_ratio))
+```
+
+# Crowdsourced Cyclospora Watch
+
+*Last updated: `r format(Sys.time(), "%B %d, %Y at %I:%M %p %Z")`*
+
+**`r n_total`** responses collected so far. This is a self-reported, crowdsourced
+tracker built by a group of `r "r/publichealth"` folks trying to spot patterns
+in the current multistate cyclospora outbreak — **not** an official CDC or
+state health department investigation. There is no control group, so results
+below are proportional reporting among people who got sick, not proof of cause.
+Treat this as "worth watching," not "confirmed."
+
+## Top produce leads
+
+Sorted by signal ratio — how much more often cases report eating this
+compared to how often people eat it in an ordinary two-week period. A ratio
+above 1 means it's showing up more than you'd expect from typical diets.
+
+```{r produce-signal-table}
+datatable(produce_signal, rownames = FALSE,
+          colnames = c("Food", "# cases", "% of cases", "Baseline %", "Signal ratio"),
+          options = list(pageLength = 10, order = list(list(4, "desc"))))
+```
+
+```{r produce-signal-plot, fig.width=9, fig.height=6}
+produce_signal %>%
+  filter(n_cases >= 3) %>%
+  ggplot(aes(x = reorder(category, signal_ratio), y = signal_ratio)) +
+  geom_col(fill = "#c0392b") +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  labs(title = "Produce Signal Ratio", x = NULL, y = "Signal ratio (case % / baseline %)") +
+  theme_minimal(base_size = 13)
+```
+
+## All produce mentioned
+
+```{r produce-table}
+datatable(produce_freq, rownames = FALSE,
+          colnames = c("Food", "# cases", "% of cases"),
+          options = list(pageLength = 10))
+```
+
+## Stores & restaurants mentioned
+
+```{r store-table}
+datatable(store_freq, rownames = FALSE,
+          colnames = c("Store/restaurant", "# cases", "% of cases"),
+          options = list(pageLength = 10))
+```
+
+## Reported symptom duration
+
+Cyclospora illness tends to run longer than most foodborne bugs (often weeks,
+sometimes relapsing). Short-duration reports are more likely something else.
+
+```{r duration-table}
+if (nrow(duration_summary) > 0) {
+  datatable(duration_summary, rownames = FALSE,
+            colnames = c("Duration", "# responses", "% of responses"),
+            options = list(pageLength = 10))
+}
+```
+
+## Epi curve
+
+```{r epi-curve, fig.width=10, fig.height=5}
+if ("onset_date" %in% names(df)) {
+  epi_curve_data <- df %>%
+    mutate(onset_date = suppressWarnings(
+      lubridate::parse_date_time(onset_date,
+        orders = c("mdy", "ymd", "dmy", "mdY HMS", "ymd HMS"))
+    )) %>%
+    mutate(onset_date = as_date(onset_date)) %>%
+    filter(!is.na(onset_date)) %>%
+    count(onset_date, name = "cases")
+
+  if (nrow(epi_curve_data) > 0) {
+    ggplot(epi_curve_data, aes(onset_date, cases)) +
+      geom_col(fill = "#c0392b") +
+      scale_x_date(date_breaks = "1 week", date_labels = "%b %d") +
+      labs(title = "Epi Curve: Self-Reported Symptom Onset Dates",
+           x = "Onset date", y = "Cases") +
+      theme_minimal(base_size = 13) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  }
+}
+```
+
+---
+
+**How to read this page:** a high signal ratio means the food is reported by
+sick people more than you'd expect from normal eating habits — that's a lead
+worth watching, not a verdict. Small numbers (a food only 2-3 people
+mentioned) are noisy and easy to over-read. If something looks concerning and
+consistent, the right next step is reporting it to your **local or state
+health department**, who can do formal case-control interviews and trace
+product lots — this page can't do that part.
+
+*Want to add your own report? [Link to your Google Form here].*
