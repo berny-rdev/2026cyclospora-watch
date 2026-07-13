@@ -1,0 +1,29 @@
+{
+  "produce_categories": ["lettuce", "spinach", "cilantro", "basil", "parsley", "raspberries", "strawberries", "blackberries", "cucumber", "tomato", "snap_peas", "green_onion", "cabbage", "carrot", "broccoli", "melon", "bell_pepper", "avocado", "celery", "radish", "mint", "salad_bagged", "salad_restaurant"],
+  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant"],
+  "baseline_commonness": {
+    "lettuce": 55,
+    "spinach": 25,
+    "cilantro": 20,
+    "basil": 10,
+    "parsley": 12,
+    "raspberries": 10,
+    "strawberries": 30,
+    "blackberries": 8,
+    "cucumber": 30,
+    "tomato": 45,
+    "snap_peas": 8,
+    "green_onion": 20,
+    "cabbage": 15,
+    "carrot": 40,
+    "broccoli": 35,
+    "melon": 20,
+    "bell_pepper": 30,
+    "avocado": 35,
+    "celery": 15,
+    "radish": 6,
+    "mint": 5,
+    "salad_bagged": 25,
+    "salad_restaurant": 20
+  }
+}
