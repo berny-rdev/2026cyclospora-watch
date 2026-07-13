@@ -236,21 +236,48 @@ if ("shop_raw" %in% names(df)) {
 # file alongside index.html.
 save_vocabulary(vocab, VOCAB_PATH)
 
+# 95% Wilson score CI on each proportion - stays sane at small n and near
+# 0%/100%, unlike the naive normal approximation. Base R only.
+wilson_ci <- function(x, n, conf_level = 0.95) {
+  if (n == 0) return(c(lower = NA_real_, upper = NA_real_))
+  p_hat <- x / n
+  z <- qnorm(1 - (1 - conf_level) / 2)
+  denom <- 1 + z^2 / n
+  center <- p_hat + z^2 / (2 * n)
+  adj <- z * sqrt((p_hat * (1 - p_hat) + z^2 / (4 * n)) / n)
+  c(lower = max(0, (center - adj) / denom), upper = min(1, (center + adj) / denom))
+}
+
+add_wilson_ci <- function(freq_df, n_total) {
+  ci <- purrr::map2_dfr(freq_df$n_cases, n_total, ~ as.list(wilson_ci(.x, .y)))
+  freq_df %>%
+    mutate(ci_low_pct = round(ci$lower * 100, 1), ci_high_pct = round(ci$upper * 100, 1))
+}
+
 produce_freq <- produce_long %>%
   distinct(response_id, category) %>%
   count(category, sort = TRUE, name = "n_cases") %>%
-  mutate(pct_of_cases = round(100 * n_cases / n_total, 1))
+  mutate(pct_of_cases = round(100 * n_cases / n_total, 1)) %>%
+  add_wilson_ci(n_total)
 
 store_freq <- store_long %>%
   distinct(response_id, category) %>%
   count(category, sort = TRUE, name = "n_cases") %>%
-  mutate(pct_of_cases = round(100 * n_cases / n_total, 1))
+  mutate(pct_of_cases = round(100 * n_cases / n_total, 1)) %>%
+  add_wilson_ci(n_total)
 
 produce_signal <- produce_freq %>%
   mutate(baseline_pct = unlist(vocab$baseline_commonness)[category]) %>%
   filter(!is.na(baseline_pct)) %>%
-  mutate(signal_ratio = round(pct_of_cases / baseline_pct, 2)) %>%
-  arrange(desc(signal_ratio))
+  mutate(
+    signal_ratio = round(pct_of_cases / baseline_pct, 2),
+    signal_ratio_low = round(ci_low_pct / baseline_pct, 2),
+    signal_ratio_high = round(ci_high_pct / baseline_pct, 2)
+  ) %>%
+  # Sort by the CONSERVATIVE (lower-bound CI) ratio, not the raw point
+  # estimate - discounts small-n flukes, rewards foods elevated even
+  # under the pessimistic estimate.
+  arrange(desc(signal_ratio_low), desc(signal_ratio))
 ```
 
 # Crowdsourced Cyclospora Watch
@@ -274,15 +301,17 @@ above 1 means it's showing up more than you'd expect from typical diets.
 
 ```{r produce-signal-table}
 datatable(produce_signal, rownames = FALSE,
-          colnames = c("Food", "# cases", "% of cases", "Baseline %", "Signal ratio"),
-          options = list(pageLength = 10, order = list(list(4, "desc"))))
+          colnames = c("Food", "# cases", "% of cases", "CI low", "CI high", "Baseline %",
+                       "Signal ratio", "Ratio CI low", "Ratio CI high"),
+          options = list(pageLength = 10, order = list(list(7, "desc"))))
 ```
 
 ```{r produce-signal-plot, fig.width=9, fig.height=6}
 produce_signal %>%
   filter(n_cases >= 3) %>%
-  ggplot(aes(x = reorder(category, signal_ratio), y = signal_ratio)) +
+  ggplot(aes(x = reorder(category, signal_ratio_low), y = signal_ratio)) +
   geom_col(fill = "#c0392b") +
+  geom_errorbar(aes(ymin = signal_ratio_low, ymax = signal_ratio_high), width = 0.3, color = "gray30") +
   geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
   coord_flip() +
   labs(title = "Produce Signal Ratio", x = NULL, y = "Signal ratio (case % / baseline %)") +
@@ -293,7 +322,7 @@ produce_signal %>%
 
 ```{r produce-table}
 datatable(produce_freq, rownames = FALSE,
-          colnames = c("Food", "# cases", "% of cases"),
+          colnames = c("Food", "# cases", "% of cases", "CI low", "CI high"),
           options = list(pageLength = 10))
 ```
 
@@ -301,7 +330,7 @@ datatable(produce_freq, rownames = FALSE,
 
 ```{r store-table}
 datatable(store_freq, rownames = FALSE,
-          colnames = c("Store/restaurant", "# cases", "% of cases"),
+          colnames = c("Store/restaurant", "# cases", "% of cases", "CI low", "CI high"),
           options = list(pageLength = 10))
 ```
 
