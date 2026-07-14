@@ -1,6 +1,6 @@
 {
-  "produce_categories": ["lettuce", "spinach", "cilantro", "basil", "parsley", "raspberries", "strawberries", "blackberries", "cucumber", "tomato", "snap_peas", "green_onion", "cabbage", "carrot", "broccoli", "melon", "bell_pepper", "avocado", "celery", "radish", "mint", "salad_bagged", "salad_restaurant", "cauliflower", "dill", "cherries", "sushi", "apples", "onions", "corn", "veggie_tray", "stone_fruit", "kiwi", "bananas", "tacos", "romaine_head", "romaine_prepackaged", "iceberg_head", "iceberg_prepackaged", "mesclun_spring_mix", "mango", "Shredded Lettuce On Food From Culver’s", "And Jimmy John’s (Not Salads)", "frozen_vegetables", "no_specific_item"],
-  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant", "harris_teeter", "regional_grocery", "casual_dining", "fast_casual", "unknown_source", "meijer", "texas_roadhouse", "olive_garden", "culvers", "marianos", "unspecified_grocery_store", "chick_fil_a", "unspecified_restaurant", "big_y", "taylor_farms", "tom_thumb", "sprouts", "lidl", "giant", "food_lion", "acme", "Raley’s", "schnucks", "quiktrip", "sheetz", "Village Garden (All In Cuyahoga Falls", "Oh)", "giant_eagle", "bjs", "Culver’s", "Jimmy John’s", "jimmy_johns", "tovala", "albertsons", "Ralph’s", "Sam’s Club", "amazon_fresh", "burgatory", "raising_canes"],
+  "produce_categories": ["lettuce", "spinach", "cilantro", "basil", "parsley", "raspberries", "strawberries", "blackberries", "cucumber", "tomato", "snap_peas", "green_onion", "cabbage", "carrot", "broccoli", "melon", "bell_pepper", "avocado", "celery", "radish", "mint", "salad_bagged", "salad_restaurant", "cauliflower", "dill", "cherries", "sushi", "apples", "onions", "corn", "veggie_tray", "stone_fruit", "kiwi", "bananas", "tacos", "romaine_head", "romaine_prepackaged", "iceberg_head", "iceberg_prepackaged", "mesclun_spring_mix", "mango", "Shredded Lettuce On Food From Culver’s", "And Jimmy John’s (Not Salads)", "frozen_vegetables", "no_specific_item", "grapes", "potatoes", "eggs"],
+  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant", "harris_teeter", "regional_grocery", "casual_dining", "fast_casual", "unknown_source", "meijer", "texas_roadhouse", "olive_garden", "culvers", "marianos", "unspecified_grocery_store", "chick_fil_a", "unspecified_restaurant", "big_y", "taylor_farms", "tom_thumb", "sprouts", "lidl", "giant", "food_lion", "acme", "Raley’s", "schnucks", "quiktrip", "sheetz", "Village Garden (All In Cuyahoga Falls", "Oh)", "giant_eagle", "bjs", "Culver’s", "Jimmy John’s", "jimmy_johns", "tovala", "albertsons", "Ralph’s", "Sam’s Club", "amazon_fresh", "burgatory", "raising_canes", "happy_friar", "frontier_inn", "new_dumpling_and_sushi_house", "martins"],
   "baseline_commonness": {
     "romaine_head": 15,
     "romaine_prepackaged": 20,
@@ -88,7 +88,13 @@
     "cauliflower": "cauliflower",
     "steamed vegetables in bag": "frozen_vegetables",
     "nothing that stands out": "no_specific_item",
-    "artisan lettuce from aldi": "salad_bagged"
+    "artisan lettuce from aldi": "salad_bagged",
+    "grocery store sushi with avocado": "sushi",
+    "sushi w avocado from restaurant": "sushi",
+    "grapes": "grapes",
+    "potatoes": "potatoes",
+    "eggs": "eggs",
+    "i am fairly certain the walmart prepackaged lettuce caused my issues.": "salad_bagged"
   },
   "store_item_map": {
     "kroger": "kroger",
@@ -143,6 +149,11 @@
     "amazon fresh": "amazon_fresh",
     "aldi": "aldi",
     "burgatory": "burgatory",
-    "raising canes": "raising_canes"
+    "raising canes": "raising_canes",
+    "happy friar": "happy_friar",
+    "frontier inn": "frontier_inn",
+    "new dumpling and sushi house": "new_dumpling_and_sushi_house",
+    "none. i avoid eating out.": "unknown_source",
+    "martin's": "martins"
   }
 }
