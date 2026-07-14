@@ -507,6 +507,7 @@ if ("onset_date" %in% names(df)) {
   }
 }
 ```
+
 ## Reddit thread parsed sources
 
 This is a hand-compiled tally of food/restaurant mentions from Reddit threads,
