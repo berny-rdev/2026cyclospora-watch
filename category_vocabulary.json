@@ -1,6 +1,6 @@
 {
-  "produce_categories": ["lettuce", "spinach", "cilantro", "basil", "parsley", "raspberries", "strawberries", "blackberries", "cucumber", "tomato", "snap_peas", "green_onion", "cabbage", "carrot", "broccoli", "melon", "bell_pepper", "avocado", "celery", "radish", "mint", "salad_bagged", "salad_restaurant", "cauliflower", "dill", "cherries", "sushi", "apples", "onions", "corn", "veggie_tray", "stone_fruit", "kiwi", "bananas", "tacos", "romaine_head", "romaine_prepackaged", "iceberg_head", "iceberg_prepackaged", "mesclun_spring_mix", "mango", "Shredded Lettuce On Food From Culver’s", "And Jimmy John’s (Not Salads)", "frozen_vegetables", "no_specific_item", "grapes", "potatoes", "eggs", "beef_burger", "pico_de_gallo", "pineapple", "citrus"],
-  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant", "harris_teeter", "regional_grocery", "casual_dining", "fast_casual", "unknown_source", "meijer", "texas_roadhouse", "olive_garden", "culvers", "marianos", "unspecified_grocery_store", "chick_fil_a", "unspecified_restaurant", "big_y", "taylor_farms", "tom_thumb", "sprouts", "lidl", "giant", "food_lion", "acme", "Raley’s", "schnucks", "quiktrip", "sheetz", "Village Garden (All In Cuyahoga Falls", "Oh)", "giant_eagle", "bjs", "Culver’s", "Jimmy John’s", "jimmy_johns", "tovala", "albertsons", "Ralph’s", "Sam’s Club", "amazon_fresh", "burgatory", "raising_canes", "happy_friar", "frontier_inn", "new_dumpling_and_sushi_house", "martins", "Paisano’s And Lost Dog Cafe", "bucharest_grill", "stater_bros", "grocery_outlet", "iron_bar", "Jimmy John’s 7/6.", "country_grocer", "elisa", "marilena", "rodneys_oyster_house", "Wendy’s", "savmor"],
+  "produce_categories": ["lettuce", "spinach", "cilantro", "basil", "parsley", "raspberries", "strawberries", "blackberries", "cucumber", "tomato", "snap_peas", "green_onion", "cabbage", "carrot", "broccoli", "melon", "bell_pepper", "avocado", "celery", "radish", "mint", "salad_bagged", "salad_restaurant", "cauliflower", "dill", "cherries", "sushi", "apples", "onions", "corn", "veggie_tray", "stone_fruit", "kiwi", "bananas", "tacos", "romaine_head", "romaine_prepackaged", "iceberg_head", "iceberg_prepackaged", "mesclun_spring_mix", "mango", "Shredded Lettuce On Food From Culver’s", "And Jimmy John’s (Not Salads)", "frozen_vegetables", "no_specific_item", "grapes", "potatoes", "eggs", "beef_burger", "pico_de_gallo", "pineapple", "citrus", "snow_peas"],
+  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant", "harris_teeter", "regional_grocery", "casual_dining", "fast_casual", "unknown_source", "meijer", "texas_roadhouse", "olive_garden", "culvers", "marianos", "unspecified_grocery_store", "chick_fil_a", "unspecified_restaurant", "big_y", "taylor_farms", "tom_thumb", "sprouts", "lidl", "giant", "food_lion", "acme", "Raley’s", "schnucks", "quiktrip", "sheetz", "Village Garden (All In Cuyahoga Falls", "Oh)", "giant_eagle", "bjs", "Culver’s", "Jimmy John’s", "jimmy_johns", "tovala", "albertsons", "Ralph’s", "Sam’s Club", "amazon_fresh", "burgatory", "raising_canes", "happy_friar", "frontier_inn", "new_dumpling_and_sushi_house", "martins", "Paisano’s And Lost Dog Cafe", "bucharest_grill", "stater_bros", "grocery_outlet", "iron_bar", "Jimmy John’s 7/6.", "country_grocer", "elisa", "marilena", "rodneys_oyster_house", "Wendy’s", "savmor", "beyond_juicery", "block_brewing_company", "playa_bowls", "sunset_foods", "jewel_osco"],
   "baseline_commonness": {
     "romaine_head": 15,
     "romaine_prepackaged": 20,
@@ -111,7 +111,8 @@
     "pico de gallo (so onions and lime in addition to the above)": "pico_de_gallo",
     "pineapple": "pineapple",
     "apple slices": "apples",
-    "clementines": "citrus"
+    "clementines": "citrus",
+    "snow peas": "snow_peas"
   },
   "store_item_map": {
     "kroger": "kroger",
@@ -197,6 +198,11 @@
     "local restaraunts (central nys)": "unspecified_restaurant",
     "wegmans": "wegmans",
     "safeway": "safeway",
-    "local thai restaurant": "unspecified_restaurant"
+    "local thai restaurant": "unspecified_restaurant",
+    "beyond juicery": "beyond_juicery",
+    "block brewing company": "block_brewing_company",
+    "playa bowls": "playa_bowls",
+    "sunset foods": "sunset_foods",
+    "jewel osco": "jewel_osco"
   }
 }
