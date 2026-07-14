@@ -4,6 +4,7 @@ A crowdsourced, self-reported tracker for the current multistate cyclospora
 outbreak, built by a grad student with an interest in public health. Not affiliated with CDC
 or any state health department — this is a hypothesis-generating tool, not
 an official investigation.
+Here is the link to view: https://berny-rdev.github.io/2026cyclospora-watch/index.html
 
 ## What's in here
 
