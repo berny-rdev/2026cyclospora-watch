@@ -399,8 +399,9 @@ lead than the point estimate alone.*
 ```{r produce-signal-plot, fig.width=9, fig.height=6}
 produce_signal %>%
   filter(n_cases >= 3) %>%
-  ggplot(aes(x = reorder(category, signal_ratio_low), y = signal_ratio)) +
-  geom_col(fill = "#c0392b") +
+  ggplot(aes(x = reorder(category, signal_ratio_low), y = signal_ratio, fill = signal_ratio)) +
+  geom_col() +
+  scale_fill_viridis_c(option = "inferno", guide = "none") +
   geom_errorbar(aes(ymin = signal_ratio_low, ymax = signal_ratio_high), width = 0.3, color = "gray30") +
   geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
   coord_flip() +
@@ -448,7 +449,7 @@ if ("state" %in% names(df)) {
 
     ggplot(map_df, aes(long, lat, group = group, fill = n_cases)) +
       geom_polygon(color = "white", linewidth = 0.2) +
-      scale_fill_continuous(low = "#fde8e6", high = "#c0392b", name = "Self-reported cases", na.value = "gray95") +
+      scale_fill_viridis_c(option = "inferno", name = "Self-reported cases", na.value = "gray90") +
       coord_fixed(1.3) +
       theme_void() +
       labs(title = "Self-Reported Cases by State (contiguous 48 states)")
@@ -498,7 +499,8 @@ if ("onset_date" %in% names(df)) {
 
   if (nrow(epi_curve_data) > 0) {
     ggplot(epi_curve_data, aes(onset_date, cases)) +
-      geom_col(fill = "#c0392b") +
+      geom_col(aes(fill = cases)) +
+      scale_fill_viridis_c(option = "inferno", guide = "none") +
       scale_x_date(date_breaks = "1 week", date_labels = "%b %d") +
       labs(title = "Epi Curve: Self-Reported Symptom Onset Dates",
            x = "Onset date", y = "Cases") +
@@ -539,6 +541,7 @@ if (!is.null(tally_data) && nrow(tally_data) > 0) {
 
   ggplot(plot_data, aes(x = food, y = mentions, fill = restaurant)) +
     geom_col(position = position_dodge(preserve = "single"), color = "white", linewidth = 0.2) +
+    scale_fill_viridis_d(option = "inferno") +
     theme_minimal(base_size = 12) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
     labs(title = "Reddit Mentions: Top 15 Foods by Restaurant/Source",
