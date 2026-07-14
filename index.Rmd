@@ -366,6 +366,93 @@ produce_signal <- produce_freq %>%
   arrange(desc(signal_ratio_low), desc(signal_ratio))
 ```
 
+```{r derived-data}
+## Everything below precomputes data used by BOTH a chart (shown early on
+## the page) and its companion table (shown in the Data Tables section at
+## the bottom) - centralizing this here means the chart and its table can
+## never disagree, and moving chunks around the page later won't break
+## anything since both draw from these same precomputed objects.
+
+# --- US state counts ---
+normalize_state <- function(x) {
+  x <- str_trim(x)
+  full_match <- state.name[match(str_to_title(x), state.name)]
+  abbr_match <- state.name[match(str_to_upper(x), state.abb)]
+  dc_match <- ifelse(
+    str_to_lower(x) %in% c("dc", "washington dc", "washington, dc", "district of columbia"),
+    "District of Columbia", NA_character_
+  )
+  coalesce(full_match, abbr_match, dc_match)
+}
+
+state_counts <- if ("state" %in% names(df)) {
+  df %>%
+    mutate(state = normalize_state(state)) %>%
+    filter(!is.na(state)) %>%
+    count(state, name = "n_cases") %>%
+    arrange(desc(n_cases))
+} else {
+  tibble()
+}
+
+# --- Canadian province counts ---
+canada_provinces <- c("British Columbia", "Alberta", "Saskatchewan", "Manitoba", "Ontario",
+                       "Quebec", "New Brunswick", "Nova Scotia", "Prince Edward Island",
+                       "Newfoundland and Labrador")
+
+mapcan_available <- requireNamespace("mapcan", quietly = TRUE)
+
+province_counts <- if ("state" %in% names(df)) {
+  df %>%
+    mutate(province = str_trim(state)) %>%
+    filter(province %in% canada_provinces) %>%
+    count(province, name = "n_cases") %>%
+    arrange(desc(n_cases))
+} else {
+  tibble()
+}
+
+# --- Epi curve data ---
+epi_curve_data <- if ("onset_date" %in% names(df)) {
+  df %>%
+    mutate(onset_date = suppressWarnings(
+      lubridate::parse_date_time(onset_date,
+        orders = c("mdy", "ymd", "dmy", "mdY HMS", "ymd HMS"))
+    )) %>%
+    mutate(onset_date = as_date(onset_date)) %>%
+    filter(!is.na(onset_date)) %>%
+    count(onset_date, name = "cases") %>%
+    arrange(onset_date)
+} else {
+  tibble()
+}
+
+# --- Reddit tally data (separate spreadsheet from the main form) ---
+RESTAURANT_UR = "https://docs.google.com/spreadsheets/d/1t-IXTcBjtrI7bP9HFRPlVluc3oVNWjnjYLTPg6DrlXE/edit?usp=sharing"
+tally_data <- tryCatch(
+  read_sheet(RESTAURANT_UR, sheet = "Restaurant_Food_Tally"),
+  error = function(e) NULL
+)
+
+if (!is.null(tally_data) && nrow(tally_data) > 0) {
+  names(tally_data)[1:3] <- c("restaurant", "food", "mentions")
+  tally_data <- tally_data %>% filter(!is.na(restaurant), !is.na(food))
+} else {
+  tally_data <- tibble(restaurant = character(), food = character(), mentions = numeric())
+}
+
+top_tally_foods <- tally_data %>%
+  group_by(food) %>%
+  summarise(total = sum(mentions, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(total)) %>%
+  slice_head(n = 15) %>%
+  pull(food)
+
+tally_plot_data <- tally_data %>%
+  filter(food %in% top_tally_foods) %>%
+  mutate(food = factor(food, levels = top_tally_foods))
+```
+
 # Crowdsourced Cyclospora Watch
 
 *Last updated: `r format(Sys.time(), "%B %d, %Y at %I:%M %p %Z")`*
@@ -379,22 +466,15 @@ state health department investigation. There is no control group, so results
 below are proportional reporting among people who got sick, not proof of cause.
 Treat this as "worth watching," not "confirmed."
 
-## Top produce leads
+---
+
+# Charts
+
+## Chart 1: Top Produce Leads by Signal Ratio
 
 Sorted by signal ratio — how much more often cases report eating this
 compared to how often people eat it in an ordinary two-week period. A ratio
 above 1 means it's showing up more than you'd expect from typical diets.
-
-```{r produce-signal-table}
-datatable(produce_signal, rownames = FALSE,
-          colnames = c("Food", "# cases", "% of cases", "CI low", "CI high", "Baseline %",
-                       "Signal ratio", "Ratio CI low", "Ratio CI high"),
-          options = list(pageLength = 10, order = list(list(7, "desc"))))
-```
-
-*CI columns are a 95% confidence interval — small sample sizes mean wide
-ranges. If the "Ratio CI low" column is still above 1, that's a stronger
-lead than the point estimate alone.*
 
 ```{r produce-signal-plot, fig.width=9, fig.height=6}
 produce_signal %>%
@@ -410,7 +490,169 @@ produce_signal %>%
   theme_minimal(base_size = 13)
 ```
 
-## All produce mentioned
+*See Table 1 below for the full data, including confidence intervals.*
+
+## Chart 2: Cases by State
+
+```{r state-map, fig.width=9, fig.height=6}
+if (nrow(state_counts) > 0) {
+  # Using the base "maps" package instead of usmap/sf - pure data, no
+  # compiled system libraries required, so this can't break the same
+  # way again. Trade-off: contiguous 48 states only (no AK/HI/DC as
+  # separate shapes) - acceptable for this use case.
+  us_states <- map_data("state")
+  map_df <- us_states %>%
+    left_join(state_counts %>% mutate(region = str_to_lower(state)), by = "region")
+
+  ggplot(map_df, aes(long, lat, group = group, fill = n_cases)) +
+    geom_polygon(color = "white", linewidth = 0.2) +
+    scale_fill_viridis_c(option = "inferno", direction = -1, name = "Self-reported cases", na.value = "gray90") +
+    coord_fixed(1.3) +
+    theme_void() +
+    labs(title = "Self-Reported Cases by State (contiguous 48 states)")
+} else {
+  cat("*No state data could be matched yet.*")
+}
+```
+
+*This is a representation of the cases that have been self-reported in
+this survey. For the official case count, please refer to the CDC or
+your relevant state/local health department. See Table 2 below for the
+full state-by-state count.*
+
+## Chart 3: Cases by Canadian Province
+
+```{r canada-map, fig.width=9, fig.height=7}
+if (mapcan_available && nrow(province_counts) > 0) {
+  province_shapes <- mapcan::mapcan(boundaries = province, type = standard)
+
+  province_map_data <- province_shapes %>%
+    left_join(province_counts, by = c("pr_english" = "province"))
+
+  ggplot(province_map_data, aes(long, lat, group = group, fill = n_cases)) +
+    geom_polygon(color = "white") +
+    scale_fill_viridis_c(option = "inferno", direction = -1, name = "Self-reported cases", na.value = "gray90") +
+    coord_fixed() +
+    theme_void() +
+    labs(title = "Self-Reported Cases by Province")
+} else if (!mapcan_available) {
+  cat("*Province map unavailable this run (mapcan package not installed).*")
+} else {
+  cat("*No Canadian responses yet.*")
+}
+```
+
+*See Table 3 below for the full province-by-province count.*
+
+## Chart 4: Epi Curve
+
+```{r epi-curve, fig.width=10, fig.height=5}
+if (nrow(epi_curve_data) > 0) {
+  ggplot(epi_curve_data, aes(onset_date, cases)) +
+    geom_col(aes(fill = cases)) +
+    scale_fill_viridis_c(option = "inferno", guide = "none") +
+    scale_x_date(date_breaks = "1 week", date_labels = "%b %d") +
+    labs(title = "Epi Curve: Self-Reported Symptom Onset Dates",
+         x = "Onset date", y = "Cases") +
+    theme_minimal(base_size = 13) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+} else {
+  cat("*No onset date data available yet.*")
+}
+```
+
+*See Table 4 below for the full date-by-date case counts.*
+
+## Chart 5: Reddit Thread Parsed Sources
+
+This is a hand-compiled tally of food/restaurant mentions from Reddit threads,
+kept separate from the statistical analysis above since it doesn't have the
+per-person structure needed for the confidence intervals or signal ratios.
+Read as "what's been mentioned together," not as a statistical finding.
+
+```{r restaurant-food-tally, fig.width=11, fig.height=6}
+if (nrow(tally_plot_data) > 0) {
+  ggplot(tally_plot_data, aes(x = food, y = mentions, fill = restaurant)) +
+    geom_col(position = position_dodge(preserve = "single"), color = "white", linewidth = 0.2) +
+    scale_fill_viridis_d(option = "inferno") +
+    theme_minimal(base_size = 12) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Reddit Mentions: Top 15 Foods by Restaurant/Source",
+         x = NULL, y = "Mentions", fill = "Restaurant/Source")
+} else {
+  cat("*No tally data found yet - add a 'Restaurant_Food_Tally' tab to the sheet.*")
+}
+```
+
+*See Table 5 below for the full mention tally (all restaurants/foods, not
+just the top 15 shown here).*
+
+---
+
+# Data Tables
+
+## Table 1: Produce Signal Ratio (Full Data)
+
+```{r produce-signal-table}
+datatable(produce_signal, rownames = FALSE,
+          colnames = c("Food", "# cases", "% of cases", "CI low", "CI high", "Baseline %",
+                       "Signal ratio", "Ratio CI low", "Ratio CI high"),
+          options = list(pageLength = 10, order = list(list(7, "desc"))))
+```
+
+*CI columns are a 95% confidence interval — small sample sizes mean wide
+ranges. If the "Ratio CI low" column is still above 1, that's a stronger
+lead than the point estimate alone.*
+
+## Table 2: Cases by State (Full Data)
+
+```{r state-table}
+if (nrow(state_counts) > 0) {
+  datatable(state_counts, rownames = FALSE,
+            colnames = c("State", "# cases"),
+            options = list(pageLength = 10))
+} else {
+  cat("*No state data available yet.*")
+}
+```
+
+## Table 3: Cases by Canadian Province (Full Data)
+
+```{r province-table}
+if (nrow(province_counts) > 0) {
+  datatable(province_counts, rownames = FALSE,
+            colnames = c("Province", "# cases"),
+            options = list(pageLength = 10))
+} else {
+  cat("*No Canadian responses yet.*")
+}
+```
+
+## Table 4: Epi Curve Data (Full Data)
+
+```{r epi-curve-table}
+if (nrow(epi_curve_data) > 0) {
+  datatable(epi_curve_data, rownames = FALSE,
+            colnames = c("Onset date", "Cases"),
+            options = list(pageLength = 10))
+} else {
+  cat("*No onset date data available yet.*")
+}
+```
+
+## Table 5: Reddit Mention Tally (Full Data)
+
+```{r tally-table}
+if (nrow(tally_data) > 0) {
+  datatable(tally_data %>% arrange(desc(mentions)), rownames = FALSE,
+            colnames = c("Restaurant/Source", "Food", "Mentions"),
+            options = list(pageLength = 10))
+} else {
+  cat("*No tally data found yet - add a 'Restaurant_Food_Tally' tab to the sheet.*")
+}
+```
+
+## Table 6: All Produce Mentioned
 
 ```{r produce-table}
 datatable(produce_freq, rownames = FALSE,
@@ -418,85 +660,7 @@ datatable(produce_freq, rownames = FALSE,
           options = list(pageLength = 10))
 ```
 
-## Cases by state
-
-```{r state-map, fig.width=9, fig.height=6}
-if ("state" %in% names(df)) {
-  normalize_state <- function(x) {
-    x <- str_trim(x)
-    full_match <- state.name[match(str_to_title(x), state.name)]
-    abbr_match <- state.name[match(str_to_upper(x), state.abb)]
-    dc_match <- ifelse(
-      str_to_lower(x) %in% c("dc", "washington dc", "washington, dc", "district of columbia"),
-      "District of Columbia", NA_character_
-    )
-    coalesce(full_match, abbr_match, dc_match)
-  }
-
-  state_counts <- df %>%
-    mutate(state = normalize_state(state)) %>%
-    filter(!is.na(state)) %>%
-    count(state, name = "n_cases")
-
-  if (nrow(state_counts) > 0) {
-    # Using the base "maps" package instead of usmap/sf - pure data, no
-    # compiled system libraries required, so this can't break the same
-    # way again. Trade-off: contiguous 48 states only (no AK/HI/DC as
-    # separate shapes) - acceptable for this use case.
-    us_states <- map_data("state")
-    map_df <- us_states %>%
-      left_join(state_counts %>% mutate(region = str_to_lower(state)), by = "region")
-
-    ggplot(map_df, aes(long, lat, group = group, fill = n_cases)) +
-      geom_polygon(color = "white", linewidth = 0.2) +
-      scale_fill_viridis_c(option = "inferno", direction = -1, name = "Self-reported cases", na.value = "gray90") +
-      coord_fixed(1.3) +
-      theme_void() +
-      labs(title = "Self-Reported Cases by State (contiguous 48 states)")
-  } else {
-    cat("*No state data could be matched yet.*")
-  }
-}
-```
-
-*This is a representation of the cases that have been self-reported in
-this survey. For the official case count, please refer to the CDC or
-your relevant state/local health department.*
-
-## Cases by Canadian province
-
-```{r canada-map, fig.width=9, fig.height=7}
-if ("state" %in% names(df) && requireNamespace("mapcan", quietly = TRUE)) {
-  canada_provinces <- c("British Columbia", "Alberta", "Saskatchewan", "Manitoba", "Ontario",
-                         "Quebec", "New Brunswick", "Nova Scotia", "Prince Edward Island",
-                         "Newfoundland and Labrador")
-
-  province_counts <- df %>%
-    mutate(province = str_trim(state)) %>%
-    filter(province %in% canada_provinces) %>%
-    count(province, name = "n_cases")
-
-  if (nrow(province_counts) > 0) {
-    province_shapes <- mapcan::mapcan(boundaries = province, type = standard)
-
-    province_map_data <- province_shapes %>%
-      left_join(province_counts, by = c("pr_english" = "province"))
-
-    ggplot(province_map_data, aes(long, lat, group = group, fill = n_cases)) +
-      geom_polygon(color = "white") +
-      scale_fill_viridis_c(option = "inferno", direction = -1, name = "Self-reported cases", na.value = "gray90") +
-      coord_fixed() +
-      theme_void() +
-      labs(title = "Self-Reported Cases by Province")
-  } else {
-    cat("*No Canadian responses yet.*")
-  }
-} else if ("state" %in% names(df)) {
-  cat("*Province map unavailable this run (mapcan package not installed).*")
-}
-```
-
-## Stores & restaurants mentioned
+## Table 7: Stores & Restaurants Mentioned
 
 ```{r store-table}
 datatable(store_freq, rownames = FALSE,
@@ -504,7 +668,7 @@ datatable(store_freq, rownames = FALSE,
           options = list(pageLength = 10))
 ```
 
-## Reported symptom duration
+## Table 8: Reported Symptom Duration
 
 Cyclospora illness tends to run longer than most foodborne bugs (often weeks,
 sometimes relapsing). Short-duration reports are more likely something else.
@@ -517,72 +681,6 @@ if (nrow(duration_summary) > 0) {
 }
 ```
 
-## Epi curve
-
-```{r epi-curve, fig.width=10, fig.height=5}
-if ("onset_date" %in% names(df)) {
-  epi_curve_data <- df %>%
-    mutate(onset_date = suppressWarnings(
-      lubridate::parse_date_time(onset_date,
-        orders = c("mdy", "ymd", "dmy", "mdY HMS", "ymd HMS"))
-    )) %>%
-    mutate(onset_date = as_date(onset_date)) %>%
-    filter(!is.na(onset_date)) %>%
-    count(onset_date, name = "cases")
-
-  if (nrow(epi_curve_data) > 0) {
-    ggplot(epi_curve_data, aes(onset_date, cases)) +
-      geom_col(aes(fill = cases)) +
-      scale_fill_viridis_c(option = "inferno", guide = "none") +
-      scale_x_date(date_breaks = "1 week", date_labels = "%b %d") +
-      labs(title = "Epi Curve: Self-Reported Symptom Onset Dates",
-           x = "Onset date", y = "Cases") +
-      theme_minimal(base_size = 13) +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  }
-}
-```
-
-## Reddit thread parsed sources
-
-This is a hand-compiled tally of food/restaurant mentions from Reddit threads,
-kept separate from the statistical analysis above since it doesn't have the
-per-person structure needed for the confidence intervals or signal ratios.
-Read as "what's been mentioned together," not as a statistical finding.
-
-```{r restaurant-food-tally, fig.width=11, fig.height=6}
-RESTAURANT_UR = "https://docs.google.com/spreadsheets/d/1t-IXTcBjtrI7bP9HFRPlVluc3oVNWjnjYLTPg6DrlXE/edit?usp=sharing"
-tally_data <- tryCatch(
-  read_sheet(RESTAURANT_UR, sheet = "Restaurant_Food_Tally"),
-  error = function(e) NULL
-)
-
-if (!is.null(tally_data) && nrow(tally_data) > 0) {
-  names(tally_data)[1:3] <- c("restaurant", "food", "mentions")
-  tally_data <- tally_data %>% filter(!is.na(restaurant), !is.na(food))
-
-  top_foods <- tally_data %>%
-    group_by(food) %>%
-    summarise(total = sum(mentions, na.rm = TRUE), .groups = "drop") %>%
-    arrange(desc(total)) %>%
-    slice_head(n = 15) %>%
-    pull(food)
-
-  plot_data <- tally_data %>%
-    filter(food %in% top_foods) %>%
-    mutate(food = factor(food, levels = top_foods))
-
-  ggplot(plot_data, aes(x = food, y = mentions, fill = restaurant)) +
-    geom_col(position = position_dodge(preserve = "single"), color = "white", linewidth = 0.2) +
-    scale_fill_viridis_d(option = "inferno") +
-    theme_minimal(base_size = 12) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(title = "Reddit Mentions: Top 15 Foods by Restaurant/Source",
-         x = NULL, y = "Mentions", fill = "Restaurant/Source")
-} else {
-  cat("*No tally data found yet - add a 'Restaurant_Food_Tally' tab to the sheet.*")
-}
-```
 ---
 
 **How to read this page:** a high signal ratio means the food is reported by
