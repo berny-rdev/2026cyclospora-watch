@@ -1,6 +1,6 @@
 {
-  "produce_categories": ["lettuce", "spinach", "cilantro", "basil", "parsley", "raspberries", "strawberries", "blackberries", "cucumber", "tomato", "snap_peas", "green_onion", "cabbage", "carrot", "broccoli", "melon", "bell_pepper", "avocado", "celery", "radish", "mint", "salad_bagged", "salad_restaurant", "cauliflower", "dill", "cherries", "sushi", "apples", "onions", "corn", "veggie_tray", "stone_fruit", "kiwi", "bananas", "tacos", "romaine_head", "romaine_prepackaged", "iceberg_head", "iceberg_prepackaged", "mesclun_spring_mix", "mango"],
-  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant", "harris_teeter", "regional_grocery", "casual_dining", "fast_casual", "unknown_source", "meijer", "texas_roadhouse", "olive_garden", "culvers", "marianos", "unspecified_grocery_store", "chick_fil_a", "unspecified_restaurant", "big_y", "taylor_farms", "tom_thumb", "sprouts", "lidl", "giant", "food_lion", "acme", "Raley’s", "schnucks", "quiktrip", "sheetz", "Village Garden (All In Cuyahoga Falls", "Oh)"],
+  "produce_categories": ["lettuce", "spinach", "cilantro", "basil", "parsley", "raspberries", "strawberries", "blackberries", "cucumber", "tomato", "snap_peas", "green_onion", "cabbage", "carrot", "broccoli", "melon", "bell_pepper", "avocado", "celery", "radish", "mint", "salad_bagged", "salad_restaurant", "cauliflower", "dill", "cherries", "sushi", "apples", "onions", "corn", "veggie_tray", "stone_fruit", "kiwi", "bananas", "tacos", "romaine_head", "romaine_prepackaged", "iceberg_head", "iceberg_prepackaged", "mesclun_spring_mix", "mango", "Shredded Lettuce On Food From Culver’s", "And Jimmy John’s (Not Salads)"],
+  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant", "harris_teeter", "regional_grocery", "casual_dining", "fast_casual", "unknown_source", "meijer", "texas_roadhouse", "olive_garden", "culvers", "marianos", "unspecified_grocery_store", "chick_fil_a", "unspecified_restaurant", "big_y", "taylor_farms", "tom_thumb", "sprouts", "lidl", "giant", "food_lion", "acme", "Raley’s", "schnucks", "quiktrip", "sheetz", "Village Garden (All In Cuyahoga Falls", "Oh)", "giant_eagle", "bjs", "Culver’s", "Jimmy John’s", "jimmy_johns"],
   "baseline_commonness": {
     "romaine_head": 15,
     "romaine_prepackaged": 20,
@@ -81,7 +81,9 @@
     "mango": "mango",
     "melons": "melon",
     "taco bell burrito supreme": "tacos",
-    "*likely* the lettuce in it": "lettuce"
+    "*likely* the lettuce in it": "lettuce",
+    "shredded lettuce on food from culver’s": "Shredded Lettuce On Food From Culver’s",
+    "and jimmy john’s (not salads)": "And Jimmy John’s (Not Salads)"
   },
   "store_item_map": {
     "kroger": "kroger",
@@ -118,6 +120,12 @@
     "wal-mart": "walmart",
     "acme fresh market": "acme",
     "village garden (all in cuyahoga falls": "Village Garden (All In Cuyahoga Falls",
-    "oh)": "Oh)"
+    "oh)": "Oh)",
+    "giant eagle": "giant_eagle",
+    "bjs": "bjs",
+    "target": "target",
+    "culver’s": "Culver’s",
+    "jimmy john’s": "Jimmy John’s",
+    "jimmy johns": "jimmy_johns"
   }
 }
