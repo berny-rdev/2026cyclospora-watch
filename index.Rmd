@@ -507,7 +507,44 @@ if ("onset_date" %in% names(df)) {
   }
 }
 ```
+## Reddit thread parsed sources
 
+This is a hand-compiled tally of food/restaurant mentions from Reddit threads,
+kept separate from the statistical analysis above since it doesn't have the
+per-person structure needed for the confidence intervals or signal ratios.
+Read as "what's been mentioned together," not as a statistical finding.
+
+```{r restaurant-food-tally, fig.width=11, fig.height=6}
+tally_data <- tryCatch(
+  read_sheet(SHEET_URL, sheet = "Restaurant_Food_Tally"),
+  error = function(e) NULL
+)
+
+if (!is.null(tally_data) && nrow(tally_data) > 0) {
+  names(tally_data)[1:3] <- c("restaurant", "food", "mentions")
+  tally_data <- tally_data %>% filter(!is.na(restaurant), !is.na(food))
+
+  top_foods <- tally_data %>%
+    group_by(food) %>%
+    summarise(total = sum(mentions, na.rm = TRUE), .groups = "drop") %>%
+    arrange(desc(total)) %>%
+    slice_head(n = 15) %>%
+    pull(food)
+
+  plot_data <- tally_data %>%
+    filter(food %in% top_foods) %>%
+    mutate(food = factor(food, levels = top_foods))
+
+  ggplot(plot_data, aes(x = food, y = mentions, fill = restaurant)) +
+    geom_col(position = position_dodge(preserve = "single"), color = "white", linewidth = 0.2) +
+    theme_minimal(base_size = 12) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Reddit Mentions: Top 15 Foods by Restaurant/Source",
+         x = NULL, y = "Mentions", fill = "Restaurant/Source")
+} else {
+  cat("*No tally data found yet - add a 'Restaurant_Food_Tally' tab to the sheet.*")
+}
+```
 ---
 
 **How to read this page:** a high signal ratio means the food is reported by
