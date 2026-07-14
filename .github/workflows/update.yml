@@ -39,6 +39,8 @@ jobs:
           Rscript -e 'install.packages(c("googlesheets4","dplyr","tidyr","stringr","lubridate","ggplot2","janitor","purrr","knitr","DT","rmarkdown","httr2","jsonlite"))'
       - name: Install mapcan (GitHub package, non-blocking if it fails)
         continue-on-error: true
+        env:
+          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           Rscript -e 'if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes"); remotes::install_github("mccormackandrew/mapcan")'
       - name: Render report
