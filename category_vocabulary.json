@@ -104,7 +104,8 @@
     "boxed": "no_specific_item",
     "technically) spinach": "spinach",
     "pina colada at a food festival": "no_specific_item",
-    "i think it was from taco bell lettuce consumed 7/2/26.": "salad_bagged"
+    "i think it was from taco bell lettuce consumed 7/2/26.": "salad_bagged",
+    "taco bell taco": "tacos"
   },
   "store_item_map": {
     "kroger": "kroger",
