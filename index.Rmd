@@ -463,6 +463,39 @@ if ("state" %in% names(df)) {
 this survey. For the official case count, please refer to the CDC or
 your relevant state/local health department.*
 
+## Cases by Canadian province
+
+```{r canada-map, fig.width=9, fig.height=7}
+if ("state" %in% names(df) && requireNamespace("mapcan", quietly = TRUE)) {
+  canada_provinces <- c("British Columbia", "Alberta", "Saskatchewan", "Manitoba", "Ontario",
+                         "Quebec", "New Brunswick", "Nova Scotia", "Prince Edward Island",
+                         "Newfoundland and Labrador")
+
+  province_counts <- df %>%
+    mutate(province = str_trim(state)) %>%
+    filter(province %in% canada_provinces) %>%
+    count(province, name = "n_cases")
+
+  if (nrow(province_counts) > 0) {
+    province_shapes <- mapcan::mapcan(boundaries = province, type = standard)
+
+    province_map_data <- province_shapes %>%
+      left_join(province_counts, by = c("pr_english" = "province"))
+
+    ggplot(province_map_data, aes(long, lat, group = group, fill = n_cases)) +
+      geom_polygon(color = "white") +
+      scale_fill_viridis_c(option = "inferno", direction = -1, name = "Self-reported cases", na.value = "gray90") +
+      coord_fixed() +
+      theme_void() +
+      labs(title = "Self-Reported Cases by Province")
+  } else {
+    cat("*No Canadian responses yet.*")
+  }
+} else if ("state" %in% names(df)) {
+  cat("*Province map unavailable this run (mapcan package not installed).*")
+}
+```
+
 ## Stores & restaurants mentioned
 
 ```{r store-table}
