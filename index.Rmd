@@ -516,9 +516,9 @@ per-person structure needed for the confidence intervals or signal ratios.
 Read as "what's been mentioned together," not as a statistical finding.
 
 ```{r restaurant-food-tally, fig.width=11, fig.height=6}
-RESTAURANT_URL = "https://docs.google.com/spreadsheets/d/1t-IXTcBjtrI7bP9HFRPlVluc3oVNWjnjYLTPg6DrlXE/edit?usp=sharing"
+RESTAURANT_UR = "https://docs.google.com/spreadsheets/d/1t-IXTcBjtrI7bP9HFRPlVluc3oVNWjnjYLTPg6DrlXE/edit?usp=sharing"
 tally_data <- tryCatch(
-  read_sheet(RESTAURANT_URL, sheet = "Restaurant_Food_Tally"),
+  read_sheet(RESTAURANT_UR, sheet = "Restaurant_Food_Tally"),
   error = function(e) NULL
 )
 
