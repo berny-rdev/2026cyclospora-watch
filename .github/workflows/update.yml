@@ -46,11 +46,11 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # required for LLM classification (CLASSIFICATION_METHOD = "llm" in index.Rmd); falls back to regex automatically if unset
         run: |
           Rscript -e 'rmarkdown::render("index.Rmd", output_file = "index.html")'
-
       - name: Commit and push updated page
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add index.html category_vocabulary.json
           git diff --quiet --cached || git commit -m "Auto-update report $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git pull --rebase origin main
           git push
