@@ -33,7 +33,10 @@ jobs:
       - name: Install R packages
         run: |
           Rscript -e 'install.packages(c("googlesheets4","dplyr","tidyr","stringr","lubridate","ggplot2","janitor","purrr","knitr","DT","rmarkdown","httr2","jsonlite"))'
-
+      - name: Install mapcan (GitHub package, non-blocking if it fails)
+        continue-on-error: true
+        run: |
+          Rscript -e 'if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes"); remotes::install_github("mccormackandrew/mapcan")'
       - name: Render report
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # required for LLM classification (CLASSIFICATION_METHOD = "llm" in index.Rmd); falls back to regex automatically if unset
