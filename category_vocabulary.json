@@ -1,6 +1,6 @@
 {
-  "produce_categories": ["lettuce", "spinach", "cilantro", "basil", "parsley", "raspberries", "strawberries", "blackberries", "cucumber", "tomato", "snap_peas", "green_onion", "cabbage", "carrot", "broccoli", "melon", "bell_pepper", "avocado", "celery", "radish", "mint", "salad_bagged", "salad_restaurant", "cauliflower", "dill", "cherries", "sushi", "apples", "onions", "corn", "veggie_tray", "stone_fruit", "kiwi", "bananas", "tacos", "romaine_head", "romaine_prepackaged", "iceberg_head", "iceberg_prepackaged", "mesclun_spring_mix", "mango", "Shredded Lettuce On Food From Culver’s", "And Jimmy John’s (Not Salads)", "frozen_vegetables", "no_specific_item", "grapes", "potatoes", "eggs", "beef_burger", "pico_de_gallo", "pineapple", "citrus", "snow_peas"],
-  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant", "harris_teeter", "regional_grocery", "casual_dining", "fast_casual", "unknown_source", "meijer", "texas_roadhouse", "olive_garden", "culvers", "marianos", "unspecified_grocery_store", "chick_fil_a", "unspecified_restaurant", "big_y", "taylor_farms", "tom_thumb", "sprouts", "lidl", "giant", "food_lion", "acme", "Raley’s", "schnucks", "quiktrip", "sheetz", "Village Garden (All In Cuyahoga Falls", "Oh)", "giant_eagle", "bjs", "Culver’s", "Jimmy John’s", "jimmy_johns", "tovala", "albertsons", "Ralph’s", "Sam’s Club", "amazon_fresh", "burgatory", "raising_canes", "happy_friar", "frontier_inn", "new_dumpling_and_sushi_house", "martins", "Paisano’s And Lost Dog Cafe", "bucharest_grill", "stater_bros", "grocery_outlet", "iron_bar", "Jimmy John’s 7/6.", "country_grocer", "elisa", "marilena", "rodneys_oyster_house", "Wendy’s", "savmor", "beyond_juicery", "block_brewing_company", "playa_bowls", "sunset_foods", "jewel_osco", "farmers_fridge"],
+  "produce_categories": ["lettuce", "spinach", "cilantro", "basil", "parsley", "raspberries", "strawberries", "blackberries", "cucumber", "tomato", "snap_peas", "green_onion", "cabbage", "carrot", "broccoli", "melon", "bell_pepper", "avocado", "celery", "radish", "mint", "salad_bagged", "salad_restaurant", "cauliflower", "dill", "cherries", "sushi", "apples", "onions", "corn", "veggie_tray", "stone_fruit", "kiwi", "bananas", "tacos", "romaine_head", "romaine_prepackaged", "iceberg_head", "iceberg_prepackaged", "mesclun_spring_mix", "mango", "Shredded Lettuce On Food From Culver’s", "And Jimmy John’s (Not Salads)", "frozen_vegetables", "no_specific_item", "grapes", "potatoes", "eggs", "beef_burger", "pico_de_gallo", "pineapple", "citrus", "snow_peas", "leek", "blueberries"],
+  "store_categories": ["kroger", "trader_joes", "whole_foods", "walmart", "target", "publix", "aldi", "costco", "safeway", "wegmans", "taco_bell", "chipotle", "subway", "mcdonalds", "local_farmers_market", "local_restaurant", "harris_teeter", "regional_grocery", "casual_dining", "fast_casual", "unknown_source", "meijer", "texas_roadhouse", "olive_garden", "culvers", "marianos", "unspecified_grocery_store", "chick_fil_a", "unspecified_restaurant", "big_y", "taylor_farms", "tom_thumb", "sprouts", "lidl", "giant", "food_lion", "acme", "Raley’s", "schnucks", "quiktrip", "sheetz", "Village Garden (All In Cuyahoga Falls", "Oh)", "giant_eagle", "bjs", "Culver’s", "Jimmy John’s", "jimmy_johns", "tovala", "albertsons", "Ralph’s", "Sam’s Club", "amazon_fresh", "burgatory", "raising_canes", "happy_friar", "frontier_inn", "new_dumpling_and_sushi_house", "martins", "Paisano’s And Lost Dog Cafe", "bucharest_grill", "stater_bros", "grocery_outlet", "iron_bar", "Jimmy John’s 7/6.", "country_grocer", "elisa", "marilena", "rodneys_oyster_house", "Wendy’s", "savmor", "beyond_juicery", "block_brewing_company", "playa_bowls", "sunset_foods", "jewel_osco", "farmers_fridge", "harbor_hotel", "granor_farms", "salty_dog_bar_and_grill", "brewsters_new_buffalo", "post_boy", "hellofresh", "super_saver"],
   "baseline_commonness": {
     "romaine_head": 15,
     "romaine_prepackaged": 20,
@@ -113,7 +113,10 @@
     "apple slices": "apples",
     "clementines": "citrus",
     "snow peas": "snow_peas",
-    "cosmic crisp apples": "apples"
+    "cosmic crisp apples": "apples",
+    "fresh dill": "dill",
+    "leek": "leek",
+    "blueberries and blackberries": "blueberries"
   },
   "store_item_map": {
     "kroger": "kroger",
@@ -206,6 +209,14 @@
     "sunset foods": "sunset_foods",
     "jewel osco": "jewel_osco",
     "farmers fridge detroit airport": "farmers_fridge",
-    "trader joe’s wichita kansas": "trader_joes"
+    "trader joe’s wichita kansas": "trader_joes",
+    "none": "unknown_source",
+    "i dined over the weekend in michigan at: harbor hotel": "harbor_hotel",
+    "granor farms": "granor_farms",
+    "salty dog bar & grill": "salty_dog_bar_and_grill",
+    "brewsters new buffalo": "brewsters_new_buffalo",
+    "post boy": "post_boy",
+    "hellofresh": "hellofresh",
+    "super saver a local grocer in nebraska": "super_saver"
   }
 }
