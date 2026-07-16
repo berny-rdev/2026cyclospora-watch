@@ -121,7 +121,8 @@
     "a grocery store premade italian hoagie with lettuce": "salad_bagged",
     "peaches and cherries": "stone_fruit",
     "raw onion": "onions",
-    "publix mixed fruit salad": "fruit_salad_prepackaged"
+    "publix mixed fruit salad": "fruit_salad_prepackaged",
+    "only thing not eaten by other people who didn't get sick was the bagged spinach.": "spinach"
   },
   "store_item_map": {
     "kroger": "kroger",
@@ -230,6 +231,9 @@
     "chick-fil-a": "chick_fil_a",
     "piada": "piada",
     "mizu sushi": "mizu_sushi",
-    "farmhouse deli": "farmhouse_deli"
+    "farmhouse deli": "farmhouse_deli",
+    "food lion": "food_lion",
+    "tjs": "trader_joes",
+    "local coop": "unspecified_grocery_store"
   }
 }
