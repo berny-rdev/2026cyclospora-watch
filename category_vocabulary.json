@@ -125,7 +125,8 @@
     "only thing not eaten by other people who didn't get sick was the bagged spinach.": "spinach",
     "doritos locos tacos with lettuce from taco bell": "tacos",
     "leaf lettuce": "leaf_lettuce",
-    "hospital food for a week. mango salss. a bunch of ensure shakes. extended stay hotel breakfast food.": "no_specific_item"
+    "hospital food for a week. mango salss. a bunch of ensure shakes. extended stay hotel breakfast food.": "no_specific_item",
+    "i was eating bagged popeyes spinach": "spinach"
   },
   "store_item_map": {
     "kroger": "kroger",
