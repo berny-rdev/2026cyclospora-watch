@@ -126,7 +126,8 @@
     "doritos locos tacos with lettuce from taco bell": "tacos",
     "leaf lettuce": "leaf_lettuce",
     "hospital food for a week. mango salss. a bunch of ensure shakes. extended stay hotel breakfast food.": "no_specific_item",
-    "i was eating bagged popeyes spinach": "spinach"
+    "i was eating bagged popeyes spinach": "spinach",
+    "taylor farms bagged salad kit": "salad_bagged"
   },
   "store_item_map": {
     "kroger": "kroger",
