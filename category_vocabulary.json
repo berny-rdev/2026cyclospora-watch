@@ -249,6 +249,8 @@
     "mango salsa": "unspecified_grocery_store",
     "ensure proteins": "unspecified_grocery_store",
     "hotel extended stay buffet breakfast.": "unspecified_restaurant",
-    "i eat a lot of pre-packaged salads": "unspecified_grocery_store"
+    "i eat a lot of pre-packaged salads": "unspecified_grocery_store",
+    "lettuce from subway in put n bay": "subway",
+    "ohio": "unknown_source"
   }
 }
