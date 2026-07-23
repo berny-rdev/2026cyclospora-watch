@@ -134,7 +134,8 @@
     "removed arugula from sandwiches before outbreak was publicized so contamination. may have cross contaminated. ate cole slaw on a sandwich": "arugula",
     "did not receive response from business regarding their supplier.": "no_specific_item",
     "restaurant coleslaw": "coleslaw",
-    "frozen veggies": "frozen_vegetables"
+    "frozen veggies": "frozen_vegetables",
+    "na": "no_specific_item"
   },
   "store_item_map": {
     "kroger": "kroger",
