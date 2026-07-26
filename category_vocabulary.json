@@ -139,7 +139,8 @@
     "arugula": "arugula",
     "it came from a raw bar seafood platter that i shared with a friend": "raw_bar_seafood",
     "likely from the lettuce or the veggies in the seafood salad sides. both of us had textbook cases.": "no_specific_item",
-    "marketside organic grapes": "grapes"
+    "marketside organic grapes": "grapes",
+    "blueberries and prepared salad from walmart": "salad_bagged"
   },
   "store_item_map": {
     "kroger": "kroger",
