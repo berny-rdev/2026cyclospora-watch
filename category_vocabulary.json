@@ -141,7 +141,8 @@
     "likely from the lettuce or the veggies in the seafood salad sides. both of us had textbook cases.": "no_specific_item",
     "marketside organic grapes": "grapes",
     "blueberries and prepared salad from walmart": "salad_bagged",
-    "taco bell items with lettuce in them": "tacos"
+    "taco bell items with lettuce in them": "tacos",
+    "pico de gallo": "pico_de_gallo"
   },
   "store_item_map": {
     "kroger": "kroger",
@@ -296,6 +297,7 @@
     "at home and 1 local restaurant i had a salad at": "unspecified_restaurant",
     "panda express": "panda_express",
     "panera": "panera",
-    "jersey mike's": "jersey_mikes"
+    "jersey mike's": "jersey_mikes",
+    "random restaurant": "unspecified_restaurant"
   }
 }
