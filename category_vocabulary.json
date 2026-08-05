@@ -306,6 +306,8 @@
     "market basket": "market_basket",
     "farmers market": "local_farmers_market",
     "papa john's": "papa_johns",
-    "franks pizza and subs": "franks_pizza_and_subs"
+    "franks pizza and subs": "franks_pizza_and_subs",
+    "chik fil a": "chick_fil_a",
+    "giant food (grocery)": "giant"
   }
 }
