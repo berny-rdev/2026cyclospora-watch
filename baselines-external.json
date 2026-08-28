@@ -1,0 +1,265 @@
+{
+  "fetched_at": "2026-08-28T21:36:33Z",
+  "generated_by": "scripts/refresh-external-baselines.R",
+  "units_warning": "value_lb_per_year is pounds of per-capita availability per year, NOT the 0-100 'percent of population eating this in a 2-week period' scale that baseline_commonness uses in category_vocabulary.json. The two are not interchangeable. Nothing in the rendering pipeline reads this file yet.",
+  "source_page": "https://www.ers.usda.gov/data-products/food-availability-per-capita-data-system",
+  "source_files": [
+    {
+      "name": "vegetables-fresh.csv",
+      "url": "https://www.ers.usda.gov/media/5371/vegetables-fresh.csv?v=22154"
+    },
+    {
+      "name": "fruit-fresh.csv",
+      "url": "https://www.ers.usda.gov/media/5345/fruit-fresh.csv?v=48384"
+    },
+    {
+      "name": "vegetables.csv",
+      "url": "https://www.ers.usda.gov/media/5397/vegetables.csv?v=75545"
+    }
+  ],
+  "baselines": {
+    "avocado": {
+      "value_lb_per_year": 8.4497,
+      "ers_row": "Noncitrus-Avocados",
+      "source": "USDA ERS Food Availability",
+      "source_file": "fruit-fresh.csv",
+      "source_year": 2021,
+      "confidence": "ers_exact_match"
+    },
+    "basil": {
+      "value_baseline_commonness": 10,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "ERS Food Availability tracks no fresh herbs."
+    },
+    "bell_pepper": {
+      "value_lb_per_year": 11.0559,
+      "ers_row": "Bell peppers",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.037889,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "blackberries": {
+      "value_baseline_commonness": 8,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "ERS fruit series covers strawberries, raspberries, blueberries and cranberries - blackberries are absent."
+    },
+    "broccoli": {
+      "value_lb_per_year": 5.2383,
+      "ers_row": "Broccoli",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.032952,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "cabbage": {
+      "value_lb_per_year": 6.173,
+      "ers_row": "Cabbage",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.045115,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "carrot": {
+      "value_lb_per_year": 8.3814,
+      "ers_row": "Carrots",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.043027,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "cauliflower": {
+      "value_lb_per_year": 2.1206,
+      "ers_row": "Cauliflower",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.006649,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "celery": {
+      "value_lb_per_year": 4.1465,
+      "ers_row": "Celery",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.023569,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "cilantro": {
+      "value_baseline_commonness": 20,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "ERS Food Availability tracks no fresh herbs."
+    },
+    "cucumber": {
+      "value_lb_per_year": 8.1512,
+      "ers_row": "Cucumbers",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.034127,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "dill": {
+      "value_baseline_commonness": 8,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "ERS Food Availability tracks no fresh herbs."
+    },
+    "green_onion": {
+      "value_baseline_commonness": 20,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "Deliberately NOT mapped to ERS 'Onions': that row combines all onion types and is overwhelmingly dry bulb onions, which would misrepresent green onions/scallions by roughly an order of magnitude."
+    },
+    "iceberg_head": {
+      "value_lb_per_year": 10.3395,
+      "ers_row": "Lettuce head",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.058535,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "iceberg_prepackaged": {
+      "value_baseline_commonness": 12,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "ERS splits lettuce by botanical type, not packaging - no prepackaged/bagged figure exists."
+    },
+    "melon": {
+      "value_lb_per_year": 20.9558,
+      "ers_row": "Noncitrus-Melons",
+      "source": "USDA ERS Food Availability",
+      "source_file": "fruit-fresh.csv",
+      "source_year": 2021,
+      "confidence": "ers_exact_match",
+      "note": "ERS reports melons only in aggregate - cantaloupe, honeydew and watermelon are not broken out. Our regex matches all three, so the aggregate is the right granularity here."
+    },
+    "mesclun_spring_mix": {
+      "value_baseline_commonness": 8,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "Not a commodity ERS tracks; spring mix is a product form blended from leaf lettuces already counted in 'Romaine and leaf'."
+    },
+    "mint": {
+      "value_baseline_commonness": 5,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "ERS Food Availability tracks no fresh herbs."
+    },
+    "parsley": {
+      "value_baseline_commonness": 12,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "ERS Food Availability tracks no fresh herbs."
+    },
+    "radish": {
+      "value_lb_per_year": 0.7608,
+      "ers_row": "Radishes",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.002914,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "raspberries": {
+      "value_lb_per_year": 0.9168,
+      "ers_row": "Noncitrus-Raspberries",
+      "source": "USDA ERS Food Availability",
+      "source_file": "fruit-fresh.csv",
+      "source_year": 2021,
+      "confidence": "ers_exact_match"
+    },
+    "romaine_head": {
+      "value_lb_per_year": 12.6971,
+      "ers_row": "Romaine and leaf",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.085043,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "romaine_prepackaged": {
+      "value_baseline_commonness": 20,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "ERS splits lettuce by botanical type, not packaging - no prepackaged/bagged figure exists."
+    },
+    "salad_bagged": {
+      "value_baseline_commonness": 25,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "A product form, not a commodity - ERS has no equivalent."
+    },
+    "salad_restaurant": {
+      "value_baseline_commonness": 20,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "A consumption venue, not a commodity - ERS has no equivalent."
+    },
+    "snap_peas": {
+      "value_baseline_commonness": 8,
+      "source": "author estimate (unsourced)",
+      "confidence": "author_estimate",
+      "note": "ERS has 'Green peas' (processing peas) and 'Snap beans'; neither represents sugar snap peas."
+    },
+    "spinach": {
+      "value_lb_per_year": 2.1452,
+      "ers_row": "Spinach",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.020959,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    },
+    "strawberries": {
+      "value_lb_per_year": 7.2996,
+      "ers_row": "Noncitrus-Strawberries",
+      "source": "USDA ERS Food Availability",
+      "source_file": "fruit-fresh.csv",
+      "source_year": 2021,
+      "confidence": "ers_exact_match"
+    },
+    "tomato": {
+      "value_lb_per_year": 19.0282,
+      "ers_row": "Tomatoes",
+      "source": "USDA ERS Food Availability",
+      "source_file": "vegetables-fresh.csv",
+      "source_year": 2022,
+      "confidence": "ers_exact_match",
+      "value_cups_per_day": 0.080829,
+      "cups_source": "USDA ERS Loss-Adjusted Food Availability",
+      "cups_source_year": 2022
+    }
+  }
+}
