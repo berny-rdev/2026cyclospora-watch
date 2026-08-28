@@ -68,8 +68,21 @@ match_columns <- function(actual_names, signatures) {
 ## it; genuinely new foods (e.g. "purslane") get their own new category
 ## instead of being dumped into a permanent "other" bucket.
 
+## KEEP IN SYNC WITH index.Rmd. Both files seed the same shared
+## category_vocabulary.json, so a category that exists here but not there
+## gets unioned into the live vocabulary on any local run - which is how
+## the obsolete flat "lettuce" category kept coming back.
+
 produce_dict_seed <- list(
-  lettuce      = "lettuce|romaine|iceberg|spring mix|spinach mix|leafy green",
+  # Lettuce is split into whole-head vs prepackaged/bagged - this
+  # distinction matters a lot for traceback (prepackaged/bagged salad is
+  # the recurring outbreak vehicle, whole heads much less so), so we keep
+  # them as separate categories rather than merging into one "lettuce".
+  romaine_head        = "romaine.*head|head.*romaine|whole romaine",
+  romaine_prepackaged = "romaine.*(prepackag|bagged)|bagged romaine",
+  iceberg_head        = "iceberg.*head|head.*iceberg|whole iceberg",
+  iceberg_prepackaged = "iceberg.*(prepackag|bagged)|bagged iceberg",
+  mesclun_spring_mix  = "mesclun|spring mix",
   spinach      = "spinach",
   cilantro     = "cilantro|coriander",
   basil        = "\\bbasil\\b",
@@ -92,7 +105,11 @@ produce_dict_seed <- list(
   dill         = "\\bdill\\b",
   radish       = "radish",
   mint         = "\\bmint\\b",
-  salad_bagged = "bagged salad|salad kit|salad mix",
+  # Generic bagged/premade salad where the specific lettuce type isn't
+  # named - catches free-text synonyms like "premade salad", "pre-made
+  # side salad", "grab and go salad" so they land here instead of
+  # spawning a near-duplicate category.
+  salad_bagged = "bagged salad|salad kit|salad mix|premade salad|pre-made salad|pre made salad|ready.to.eat salad|grab.and.go salad",
   salad_restaurant = "restaurant salad|salad bar"
 )
 
@@ -124,7 +141,11 @@ store_dict_seed <- list(
 ## nobody's told us about yet) - the script will flag these each run so you
 ## can add a number to category_vocabulary.json's baseline_commonness object.
 baseline_commonness_seed <- c(
-  lettuce = 55, spinach = 25, cilantro = 20, basil = 10, parsley = 12,
+  # Old single "lettuce" baseline (55) split across the new granular
+  # categories - rough guesses, tune as you like.
+  romaine_head = 15, romaine_prepackaged = 20, iceberg_head = 10,
+  iceberg_prepackaged = 12, mesclun_spring_mix = 8,
+  spinach = 25, cilantro = 20, basil = 10, parsley = 12,
   raspberries = 10, strawberries = 30, blackberries = 8, cucumber = 30,
   tomato = 45, snap_peas = 8, green_onion = 20, cabbage = 15, carrot = 40,
   broccoli = 35, melon = 20, bell_pepper = 30, avocado = 35, celery = 15,
