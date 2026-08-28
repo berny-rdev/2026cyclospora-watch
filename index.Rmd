@@ -97,8 +97,33 @@ baseline_commonness_seed <- c(
 
 VOCAB_PATH <- "category_vocabulary.json"
 
+# Reads the vocabulary file, or returns NULL if it genuinely doesn't exist
+# yet (first run). A file that EXISTS but won't parse is a hard error: the
+# old behaviour returned NULL there, which silently rebuilt the vocabulary
+# from seed values and then overwrote every accumulated category, baseline
+# and cached classification with that skeleton.
+read_vocabulary_file <- function(path) {
+  if (!file.exists(path)) return(NULL)
+  tryCatch(
+    jsonlite::fromJSON(path, simplifyVector = TRUE),
+    error = function(e) {
+      stop(
+        path, " exists but could not be parsed: ", conditionMessage(e), "\n",
+        "  Refusing to continue. Proceeding would rebuild the vocabulary from seed\n",
+        "  values and overwrite every accumulated category, baseline and cached\n",
+        "  classification. Restore it with `git checkout -- ", path, "` or repair\n",
+        "  the file by hand, then re-run.",
+        call. = FALSE
+      )
+    }
+  )
+}
+
+# as.list() on a possibly-absent JSON field, without inventing a value.
+as_list_or_empty <- function(x) if (is.null(x)) list() else as.list(x)
+
 load_vocabulary <- function(path, seed_produce, seed_store, seed_baseline) {
-  v <- if (file.exists(path)) tryCatch(jsonlite::fromJSON(path, simplifyVector = TRUE), error = function(e) NULL) else NULL
+  v <- read_vocabulary_file(path)
   list(
     produce_categories = union(if (!is.null(v)) v$produce_categories else character(0), seed_produce),
     store_categories   = union(if (!is.null(v)) v$store_categories else character(0), seed_store),
@@ -114,8 +139,54 @@ load_vocabulary <- function(path, seed_produce, seed_store, seed_baseline) {
   )
 }
 
+# MERGE-ON-WRITE, not clobber-on-write.
+#
+# `vocab` is a snapshot taken when this run started. Another writer - the
+# hourly Action, or someone running the analysis script locally - may have
+# added entries since. Serializing the snapshot over the whole file would
+# silently discard them, with no conflict, because a full-file overwrite
+# always wins a rebase.
+#
+# So: re-read the file we are about to replace and merge into it. A side
+# effect worth stating, because it is the main safety property here: a
+# caller that loaded only PART of the file (e.g. a script whose
+# load_vocabulary() never reads the item maps) can no longer destroy the
+# keys it never looked at.
 save_vocabulary <- function(vocab, path) {
-  jsonlite::write_json(vocab, path, auto_unbox = TRUE, pretty = TRUE)
+  on_disk <- read_vocabulary_file(path)
+  merged <- vocab
+
+  if (!is.null(on_disk)) {
+    # Categories are additive - keep both sides.
+    merged$produce_categories <- union(vocab$produce_categories, on_disk$produce_categories)
+    merged$store_categories   <- union(vocab$store_categories,   on_disk$store_categories)
+
+    # For per-key maps, the on-disk value wins. modifyList(a, b) gives `b`
+    # precedence, so passing on_disk second means an entry already written
+    # by someone else survives, while genuinely new keys from this run are
+    # still added. On-disk decisions are the earlier, possibly already
+    # published ones, and neither script ever edits these in memory.
+    merged$baseline_commonness <- modifyList(
+      as_list_or_empty(vocab$baseline_commonness), as_list_or_empty(on_disk$baseline_commonness))
+    merged$produce_item_map <- modifyList(
+      as_list_or_empty(vocab$produce_item_map), as_list_or_empty(on_disk$produce_item_map))
+    merged$store_item_map <- modifyList(
+      as_list_or_empty(vocab$store_item_map), as_list_or_empty(on_disk$store_item_map))
+  }
+
+  # ATOMIC WRITE. write_json() straight onto `path` leaves a truncated file
+  # if the process dies mid-write, and a truncated file is exactly what
+  # read_vocabulary_file() now refuses to load. Write to a tempfile in the
+  # SAME directory (so rename stays on one filesystem and is atomic), then
+  # rename over the target. A killed process can leave a stray temp file,
+  # but never a partial category_vocabulary.json.
+  tmp <- tempfile(pattern = ".category_vocabulary", tmpdir = dirname(path), fileext = ".json")
+  jsonlite::write_json(merged, tmp, auto_unbox = TRUE, pretty = TRUE)
+  if (!file.rename(tmp, path)) {
+    unlink(tmp)
+    stop("Could not atomically replace ", path, call. = FALSE)
+  }
+  invisible(merged)
 }
 ```
 
@@ -130,8 +201,20 @@ split_freetext <- function(raw_text_vec) {
 
 regex_classify <- function(item, dict) {
   hit <- names(dict)[map_lgl(dict, ~ str_detect(item, .x))]
-  if (length(hit) == 0) return(str_to_title(item))
+  # No seed pattern matched. Return NA rather than str_to_title(item):
+  # echoing the respondent's raw text back as a category name is how
+  # entries like "No. I Made Sure To Not :(" and "Bibb Lettuce Head"
+  # became permanent categories. NA means "undecided this run" - the
+  # item is left uncategorized and retried next run, when the LLM may
+  # well be reachable again.
+  if (length(hit) == 0) return(NA_character_)
   hit[1]
+}
+
+# Categories only ever enter the vocabulary from a real decision.
+# NA means undecided, so it must never be unioned in.
+merge_categories <- function(known_categories, mapping) {
+  union(known_categories, unique(mapping[!is.na(mapping)]))
 }
 
 # LLM does the primary classification and grows the category vocabulary -
@@ -215,12 +298,12 @@ classify_items_dynamic <- function(items, known_categories, dict, domain = c("pr
   if (length(items) == 0) return(list(mapping = character(0), vocab = known_categories))
   if (method == "regex") {
     mapping <- setNames(map_chr(items, ~ regex_classify(.x, dict)), items)
-    return(list(mapping = mapping, vocab = union(known_categories, unique(mapping))))
+    return(list(mapping = mapping, vocab = merge_categories(known_categories, mapping)))
   }
   result <- call_claude_classify_dynamic(items, known_categories, domain = domain)
   if (is.null(result) || length(result) == 0) {
     mapping <- setNames(map_chr(items, ~ regex_classify(.x, dict)), items)
-    return(list(mapping = mapping, vocab = union(known_categories, unique(mapping))))
+    return(list(mapping = mapping, vocab = merge_categories(known_categories, mapping)))
   }
   mapping <- unlist(result)[items]
   mapping <- str_replace_all(str_to_lower(str_trim(mapping)), "[^a-z0-9]+", "_")
@@ -228,7 +311,7 @@ classify_items_dynamic <- function(items, known_categories, dict, domain = c("pr
   names(mapping) <- items
   missing <- is.na(mapping) | mapping == ""
   if (any(missing)) mapping[missing] <- map_chr(items[missing], ~ regex_classify(.x, dict))
-  list(mapping = mapping, vocab = union(known_categories, unique(mapping)))
+  list(mapping = mapping, vocab = merge_categories(known_categories, mapping))
 }
 
 ## Classifies free text AND grows the vocabulary in one step - CACHE-FIRST:
@@ -254,11 +337,23 @@ classify_and_grow <- function(raw_text_vec, known_categories, item_map, dict, do
     result <- classify_items_dynamic(uncached_items, known_categories, dict, domain = domain, method = method)
     known_categories <- result$vocab
     cached_category[uncached_items] <- result$mapping[uncached_items]
-    for (it in uncached_items) item_map[[it]] <- unname(cached_category[[it]])
+    # Only cache real decisions. An NA means we couldn't classify the
+    # phrase this run (usually a failed/unparseable API call), and
+    # writing that to item_map would lock the failure in permanently -
+    # the cache is checked before the LLM, so it would never be retried.
+    for (it in uncached_items) {
+      decided <- unname(cached_category[[it]])
+      if (!is.na(decided)) item_map[[it]] <- decided
+    }
   }
 
   list(
-    long = long %>% mutate(category = unname(cached_category[item])),
+    # Undecided items drop out of this run's counts entirely rather than
+    # forming an NA category row in the frequency tables. The response
+    # still counts toward n_total; it just contributes no exposure.
+    long = long %>%
+      mutate(category = unname(cached_category[item])) %>%
+      filter(!is.na(category)),
     vocab = known_categories,
     item_map = item_map
   )
@@ -318,10 +413,10 @@ if ("shop_raw" %in% names(df)) {
   store_long <- tibble()
 }
 
-# Persist the (possibly grown) vocabulary so the next scheduled run reuses
-# these categories instead of starting over. The GitHub Action commits this
-# file alongside index.html.
-save_vocabulary(vocab, VOCAB_PATH)
+# NOTE: the vocabulary is NOT persisted here. It is written in the final
+# chunk of this document, once every chart and table has rendered - so an
+# interrupted render can't leave a saved vocabulary with no corresponding
+# page. See "persist-vocabulary" at the end of the file.
 
 # 95% Wilson score CI on each proportion - stays sane at small n and near
 # 0%/100%, unlike the naive normal approximation. Base R only.
@@ -692,3 +787,16 @@ health department**, who can do formal case-control interviews and trace
 product lots — this page can't do that part.
 
 *Want to add your own report? [Fill out the form here](https://forms.gle/6zFfhiaGcw7xHDKa7).*
+
+```{r persist-vocabulary}
+# Persist the (possibly grown) vocabulary so the next scheduled run reuses
+# these categories instead of starting over. The GitHub Action commits this
+# file alongside index.html.
+#
+# This runs LAST, deliberately. Every chart and table above has already
+# rendered by now, so an interrupted or failed render can never leave a
+# written vocabulary behind with no corresponding page. save_vocabulary()
+# re-reads and merges before writing, so this is safe even if another run
+# has touched the file while this one was rendering.
+save_vocabulary(vocab, VOCAB_PATH)
+```
