@@ -194,7 +194,12 @@ load_vocabulary <- function(path, seed_produce, seed_store, seed_baseline) {
     baseline_commonness = modifyList(
       as.list(seed_baseline),
       if (!is.null(v) && !is.null(v$baseline_commonness)) as.list(v$baseline_commonness) else list()
-    )
+    ),
+    # PROVENANCE for each baseline. Parallel maps rather than nesting inside
+    # baseline_commonness, because that field is read as a flat named vector
+    # by the signal-ratio code and changing its shape would break the metric.
+    baseline_source     = if (!is.null(v) && !is.null(v$baseline_source)) as.list(v$baseline_source) else list(),
+    baseline_confidence = if (!is.null(v) && !is.null(v$baseline_confidence)) as.list(v$baseline_confidence) else list()
   )
 }
 
@@ -215,6 +220,12 @@ save_vocabulary <- function(vocab, path) {
   merged <- vocab
 
   if (!is.null(on_disk)) {
+    # Carry over any top-level key this function doesn't explicitly manage.
+    # Without this, a field added to the file (by hand, by a tool, or by a
+    # newer version of this script) is silently dropped the next time any
+    # run saves - which is exactly how the item maps used to get wiped.
+    for (k in setdiff(names(on_disk), names(merged))) merged[[k]] <- on_disk[[k]]
+
     # Categories are additive - keep both sides.
     merged$produce_categories <- union(vocab$produce_categories, on_disk$produce_categories)
     merged$store_categories   <- union(vocab$store_categories,   on_disk$store_categories)
@@ -230,6 +241,10 @@ save_vocabulary <- function(vocab, path) {
       as_list_or_empty(vocab$produce_item_map), as_list_or_empty(on_disk$produce_item_map))
     merged$store_item_map <- modifyList(
       as_list_or_empty(vocab$store_item_map), as_list_or_empty(on_disk$store_item_map))
+    merged$baseline_source <- modifyList(
+      as_list_or_empty(vocab$baseline_source), as_list_or_empty(on_disk$baseline_source))
+    merged$baseline_confidence <- modifyList(
+      as_list_or_empty(vocab$baseline_confidence), as_list_or_empty(on_disk$baseline_confidence))
   }
 
   # ATOMIC WRITE. write_json() straight onto `path` leaves a truncated file
@@ -249,15 +264,101 @@ save_vocabulary <- function(vocab, path) {
 
 vocab <- load_vocabulary(VOCAB_PATH, names(produce_dict_seed), names(store_dict_seed), baseline_commonness_seed)
 
+## Canonicalise typographic punctuation to ASCII before anything else reads
+## the string. Curly apostrophes were the single largest source of poisoned
+## categories (13 of 36) and the most likely trigger for LLM key-drift: a
+## phrase sent as a JSON key containing U+2019 can come back with U+0027,
+## the exact-name lookup misses, and the item falls to the regex fallback.
+## Applied at ingestion so tokenisation, caching and the API call all see
+## the same canonical form.
+normalize_punct <- function(x) {
+  x <- gsub("[‘’ʼ′´]", "'", x, perl = TRUE)
+  x <- gsub("[“”″]", '"', x, perl = TRUE)
+  x <- gsub("[‐‑‒–—]", "-", x, perl = TRUE)
+  x <- gsub(" ", " ", x, perl = TRUE)
+  x
+}
+
+## Split on , ; and newline - but NOT inside parentheses. Respondents write
+## "Agawam Diner (Rowley, MA); Campfire Grille (Bridgton, ME)", and a plain
+## comma split turned that one answer into three junk categories including
+## the fragments "Ma); Campfire Grille (Bridgton" and "Me)". Newlines matter
+## too: one response listed seven businesses on seven lines and produced a
+## single category containing all of them.
+split_delims <- function(s) {
+  if (is.na(s) || !nzchar(s)) return(character(0))
+  ch <- strsplit(s, "", fixed = TRUE)[[1]]
+  depth <- 0L; cur <- character(0); out <- character(0)
+  for (c in ch) {
+    if (c == "(") depth <- depth + 1L
+    else if (c == ")") depth <- max(0L, depth - 1L)
+    if (depth == 0L && (c == "," || c == ";" || c == "\n")) {
+      out <- c(out, paste0(cur, collapse = "")); cur <- character(0)
+    } else cur <- c(cur, c)
+  }
+  c(out, paste0(cur, collapse = ""))
+}
+
+## Declining to answer is not a food. Nine responses answer the produce
+## free-text with a negation; before this filter they reached the classifier
+## and could become categories like "No. I Made Sure To Not :(". Dropped
+## here means never classified and never cached. The \\b guards keep real
+## foods that merely start with these letters - "nopales", "nectarines".
+NEGATION_RE <- paste0(
+  "^(no|nope|none|nothing|n/?a|na|nil|never|not really|not that i|",
+  "i don'?t|i do not|unsure|unknown|idk|[-.–]+)\\b|^[-.–[:space:]]*$")
+is_negation <- function(item) {
+  it <- str_squish(str_to_lower(item))
+  !nzchar(it) | str_detect(it, NEGATION_RE)
+}
+
 split_freetext <- function(raw_text_vec) {
-  # Splits comma-separated free text into individual trimmed/lowercased items.
-  # No classification here - just tokenizing.
   tibble(row_id = seq_along(raw_text_vec), raw = raw_text_vec) %>%
     filter(!is.na(raw), str_trim(raw) != "") %>%
-    separate_rows(raw, sep = ",") %>%
-    mutate(item = str_trim(str_to_lower(raw))) %>%
-    filter(item != "")
+    mutate(raw = normalize_punct(raw)) %>%
+    mutate(parts = map(raw, split_delims)) %>%
+    select(row_id, parts) %>%
+    unnest(parts) %>%
+    mutate(item = str_squish(str_to_lower(parts))) %>%
+    filter(item != "", !is_negation(item)) %>%
+    select(row_id, item)
 }
+
+## ---- CHECKLIST ROUTING ---------------------------------------------------
+## Checklist answers are preset option strings - already category-shaped and
+## unambiguous - so they resolve by direct lookup and never reach the LLM or
+## the regex fallback. That removes the whole class of drift for ~90% of the
+## reported volume, and leaves the classifier to do the one job it's needed
+## for: messy free text.
+CHECKLIST_MAP_PATH <- "checklist-mapping.json"
+
+checklist_map <- local({
+  if (!file.exists(CHECKLIST_MAP_PATH)) {
+    stop(CHECKLIST_MAP_PATH, " is missing - checklist answers cannot be routed. ",
+         "Refusing to fall back to the classifier, which would silently re-introduce ",
+         "drift on the highest-volume field.", call. = FALSE)
+  }
+  m <- jsonlite::fromJSON(CHECKLIST_MAP_PATH, simplifyVector = FALSE)$mapping
+  if (is.null(m) || length(m) == 0) stop(CHECKLIST_MAP_PATH, " has no 'mapping' object.", call. = FALSE)
+  m
+})
+
+## Resolves checklist text to categories. An option present in the form but
+## absent from the map is a hard error, not a guess - a new checklist option
+## must be mapped by hand or the counts silently lose it.
+classify_checklist <- function(raw_text_vec) {
+  long <- split_freetext(raw_text_vec)
+  if (nrow(long) == 0) return(long %>% mutate(category = character(0)))
+  unknown <- setdiff(unique(long$item), names(checklist_map))
+  if (length(unknown)) {
+    stop("checklist option(s) not present in ", CHECKLIST_MAP_PATH, ":\n  - ",
+         paste(unknown, collapse = "\n  - "),
+         "\n  Add them to the mapping (with the category slug they belong to) and re-run.",
+         call. = FALSE)
+  }
+  long %>% mutate(category = vapply(item, function(i) as.character(checklist_map[[i]]), character(1)))
+}
+
 
 regex_classify <- function(item, dict) {
   hit <- names(dict)[map_lgl(dict, ~ str_detect(item, .x))]
@@ -481,23 +582,29 @@ CLASSIFICATION_METHOD <- "llm"   # "llm" (recommended) or "regex" (free, no API 
 ## (classification, vocabulary growth) works unchanged; checklist items
 ## will classify essentially perfectly since they're already exact
 ## category-shaped text (e.g. "Fresh basil", "Snow peas").
-produce_combined <- if (all(c("produce_checklist", "produce_other") %in% names(df))) {
-  paste(coalesce(as.character(df$produce_checklist), ""), coalesce(as.character(df$produce_other), ""), sep = ", ")
-} else if ("produce_checklist" %in% names(df)) {
-  df$produce_checklist
-} else if ("produce_other" %in% names(df)) {
-  df$produce_other
-} else {
-  NULL
-}
+## The two produce columns are NO LONGER concatenated. They are different
+## kinds of data and get different treatment: checklist answers are preset
+## strings resolved by direct lookup, free text goes to the classifier.
+produce_checklist_raw <- if ("produce_checklist" %in% names(df)) as.character(df$produce_checklist) else NULL
+produce_freetext_raw  <- if ("produce_other" %in% names(df)) as.character(df$produce_other) else NULL
 
-if (!is.null(produce_combined)) {
-  produce_result <- classify_and_grow(produce_combined, vocab$produce_categories, produce_dict_seed, domain = "produce", method = CLASSIFICATION_METHOD)
-  produce_long <- produce_result$long %>% mutate(response_id = row_id, .keep = "unused")
-  vocab$produce_categories <- produce_result$vocab
-} else {
-  produce_long <- tibble()
-}
+## CHECKLIST PATH - direct lookup, no LLM, no regex, no cache writes.
+produce_checklist_long <- if (!is.null(produce_checklist_raw)) {
+  classify_checklist(produce_checklist_raw) %>%
+    mutate(response_id = row_id, source_type = "checklist_direct", .keep = "unused")
+} else tibble()
+
+## FREE-TEXT PATH - unchanged: classify, grow the vocabulary, cache.
+produce_freetext_long <- if (!is.null(produce_freetext_raw)) {
+  r <- classify_and_grow(produce_freetext_raw, vocab$produce_categories,
+                         produce_dict_seed, domain = "produce", method = CLASSIFICATION_METHOD)
+  vocab$produce_categories <- r$vocab
+  r$long %>% mutate(response_id = row_id, source_type = "freetext_classified", .keep = "unused")
+} else tibble()
+
+produce_long <- bind_rows(produce_checklist_long, produce_freetext_long)
+vocab$produce_categories <- union(vocab$produce_categories,
+                                  unique(unlist(unname(checklist_map))))
 
 if ("shop_raw" %in% names(df)) {
   store_result <- classify_and_grow(df$shop_raw, vocab$store_categories, store_dict_seed, domain = "store", method = CLASSIFICATION_METHOD)
