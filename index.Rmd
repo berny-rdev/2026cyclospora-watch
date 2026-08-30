@@ -135,7 +135,14 @@ load_vocabulary <- function(path, seed_produce, seed_store, seed_baseline) {
     # decision forever, so already-classified responses can't silently
     # drift to a different category on a later run.
     produce_item_map = if (!is.null(v) && !is.null(v$produce_item_map)) as.list(v$produce_item_map) else list(),
-    store_item_map    = if (!is.null(v) && !is.null(v$store_item_map)) as.list(v$store_item_map) else list()
+    store_item_map    = if (!is.null(v) && !is.null(v$store_item_map)) as.list(v$store_item_map) else list(),
+    # PROVENANCE for each baseline. Parallel maps rather than nesting inside
+    # baseline_commonness, because that field is read as a flat named vector
+    # by the signal-ratio code and changing its shape would break the metric.
+    # baseline_source: "USDA ERS Food Availability" | "author_estimate"
+    # baseline_confidence: "exact_match" | "unsourced"
+    baseline_source     = if (!is.null(v) && !is.null(v$baseline_source)) as.list(v$baseline_source) else list(),
+    baseline_confidence = if (!is.null(v) && !is.null(v$baseline_confidence)) as.list(v$baseline_confidence) else list()
   )
 }
 
@@ -157,6 +164,12 @@ save_vocabulary <- function(vocab, path) {
   merged <- vocab
 
   if (!is.null(on_disk)) {
+    # Carry over any top-level key this function doesn't explicitly manage.
+    # Without this, a field added to the file (by hand, by a tool, or by a
+    # newer version of this script) is silently dropped the next time any
+    # run saves - which is exactly how the item maps used to get wiped.
+    for (k in setdiff(names(on_disk), names(merged))) merged[[k]] <- on_disk[[k]]
+
     # Categories are additive - keep both sides.
     merged$produce_categories <- union(vocab$produce_categories, on_disk$produce_categories)
     merged$store_categories   <- union(vocab$store_categories,   on_disk$store_categories)
@@ -172,6 +185,10 @@ save_vocabulary <- function(vocab, path) {
       as_list_or_empty(vocab$produce_item_map), as_list_or_empty(on_disk$produce_item_map))
     merged$store_item_map <- modifyList(
       as_list_or_empty(vocab$store_item_map), as_list_or_empty(on_disk$store_item_map))
+    merged$baseline_source <- modifyList(
+      as_list_or_empty(vocab$baseline_source), as_list_or_empty(on_disk$baseline_source))
+    merged$baseline_confidence <- modifyList(
+      as_list_or_empty(vocab$baseline_confidence), as_list_or_empty(on_disk$baseline_confidence))
   }
 
   # ATOMIC WRITE. write_json() straight onto `path` leaves a truncated file
@@ -191,12 +208,99 @@ save_vocabulary <- function(vocab, path) {
 ```
 
 ```{r functions}
+## Canonicalise typographic punctuation to ASCII before anything else reads
+## the string. Curly apostrophes were the single largest source of poisoned
+## categories (13 of 36) and the most likely trigger for LLM key-drift: a
+## phrase sent as a JSON key containing U+2019 can come back with U+0027,
+## the exact-name lookup misses, and the item falls to the regex fallback.
+## Applied at ingestion so tokenisation, caching and the API call all see
+## the same canonical form.
+normalize_punct <- function(x) {
+  x <- gsub("[‘’ʼ′´]", "'", x, perl = TRUE)
+  x <- gsub("[“”″]", '"', x, perl = TRUE)
+  x <- gsub("[‐‑‒–—]", "-", x, perl = TRUE)
+  x <- gsub(" ", " ", x, perl = TRUE)
+  x
+}
+
+## Split on , ; and newline - but NOT inside parentheses. Respondents write
+## "Agawam Diner (Rowley, MA); Campfire Grille (Bridgton, ME)", and a plain
+## comma split turned that one answer into three junk categories including
+## the fragments "Ma); Campfire Grille (Bridgton" and "Me)". Newlines matter
+## too: one response listed seven businesses on seven lines and produced a
+## single category containing all of them.
+split_delims <- function(s) {
+  if (is.na(s) || !nzchar(s)) return(character(0))
+  ch <- strsplit(s, "", fixed = TRUE)[[1]]
+  depth <- 0L; cur <- character(0); out <- character(0)
+  for (c in ch) {
+    if (c == "(") depth <- depth + 1L
+    else if (c == ")") depth <- max(0L, depth - 1L)
+    if (depth == 0L && (c == "," || c == ";" || c == "\n")) {
+      out <- c(out, paste0(cur, collapse = "")); cur <- character(0)
+    } else cur <- c(cur, c)
+  }
+  c(out, paste0(cur, collapse = ""))
+}
+
+## Declining to answer is not a food. Nine responses answer the produce
+## free-text with a negation; before this filter they reached the classifier
+## and could become categories like "No. I Made Sure To Not :(". Dropped
+## here means never classified and never cached. The \\b guards keep real
+## foods that merely start with these letters - "nopales", "nectarines".
+NEGATION_RE <- paste0(
+  "^(no|nope|none|nothing|n/?a|na|nil|never|not really|not that i|",
+  "i don'?t|i do not|unsure|unknown|idk|[-.–]+)\\b|^[-.–[:space:]]*$")
+is_negation <- function(item) {
+  it <- str_squish(str_to_lower(item))
+  !nzchar(it) | str_detect(it, NEGATION_RE)
+}
+
 split_freetext <- function(raw_text_vec) {
   tibble(row_id = seq_along(raw_text_vec), raw = raw_text_vec) %>%
     filter(!is.na(raw), str_trim(raw) != "") %>%
-    separate_rows(raw, sep = ",") %>%
-    mutate(item = str_trim(str_to_lower(raw))) %>%
-    filter(item != "")
+    mutate(raw = normalize_punct(raw)) %>%
+    mutate(parts = map(raw, split_delims)) %>%
+    select(row_id, parts) %>%
+    unnest(parts) %>%
+    mutate(item = str_squish(str_to_lower(parts))) %>%
+    filter(item != "", !is_negation(item)) %>%
+    select(row_id, item)
+}
+
+## ---- CHECKLIST ROUTING ---------------------------------------------------
+## Checklist answers are preset option strings - already category-shaped and
+## unambiguous - so they resolve by direct lookup and never reach the LLM or
+## the regex fallback. That removes the whole class of drift for ~90% of the
+## reported volume, and leaves the classifier to do the one job it's needed
+## for: messy free text.
+CHECKLIST_MAP_PATH <- "checklist-mapping.json"
+
+checklist_map <- local({
+  if (!file.exists(CHECKLIST_MAP_PATH)) {
+    stop(CHECKLIST_MAP_PATH, " is missing - checklist answers cannot be routed. ",
+         "Refusing to fall back to the classifier, which would silently re-introduce ",
+         "drift on the highest-volume field.", call. = FALSE)
+  }
+  m <- jsonlite::fromJSON(CHECKLIST_MAP_PATH, simplifyVector = FALSE)$mapping
+  if (is.null(m) || length(m) == 0) stop(CHECKLIST_MAP_PATH, " has no 'mapping' object.", call. = FALSE)
+  m
+})
+
+## Resolves checklist text to categories. An option present in the form but
+## absent from the map is a hard error, not a guess - a new checklist option
+## must be mapped by hand or the counts silently lose it.
+classify_checklist <- function(raw_text_vec) {
+  long <- split_freetext(raw_text_vec)
+  if (nrow(long) == 0) return(long %>% mutate(category = character(0)))
+  unknown <- setdiff(unique(long$item), names(checklist_map))
+  if (length(unknown)) {
+    stop("checklist option(s) not present in ", CHECKLIST_MAP_PATH, ":\n  - ",
+         paste(unknown, collapse = "\n  - "),
+         "\n  Add them to the mapping (with the category slug they belong to) and re-run.",
+         call. = FALSE)
+  }
+  long %>% mutate(category = vapply(item, function(i) as.character(checklist_map[[i]]), character(1)))
 }
 
 regex_classify <- function(item, dict) {
@@ -277,7 +381,11 @@ call_claude_classify_dynamic <- function(items, known_categories, domain = c("pr
     domain_instructions, "\n",
     "Respond with ONLY a raw JSON object mapping each exact input item (as written, as the ",
     "key) to its category (as the value). No prose, no markdown code fences.\n\nItems:\n",
-    paste0("- ", items, collapse = "\n")
+    # Items are already punctuation-normalised by split_freetext(), but
+    # normalise again here so this function is safe to call directly: these
+    # strings become JSON keys that Claude must echo back verbatim, and a
+    # curly apostrophe on either side breaks the exact-name lookup.
+    paste0("- ", normalize_punct(items), collapse = "\n")
   )
   resp <- tryCatch({
     httr2::request("https://api.anthropic.com/v1/messages") %>%
@@ -385,24 +493,36 @@ duration_summary <- if ("duration" %in% names(df)) {
 
 vocab <- load_vocabulary(VOCAB_PATH, names(produce_dict_seed), names(store_dict_seed), baseline_commonness_seed)
 
-produce_combined <- if (all(c("produce_checklist", "produce_other") %in% names(df))) {
-  paste(coalesce(as.character(df$produce_checklist), ""), coalesce(as.character(df$produce_other), ""), sep = ", ")
-} else if ("produce_checklist" %in% names(df)) {
-  df$produce_checklist
-} else if ("produce_other" %in% names(df)) {
-  df$produce_other
-} else {
-  NULL
-}
+## The two produce columns are NO LONGER concatenated. They are different
+## kinds of data and get different treatment: checklist answers are preset
+## strings resolved by direct lookup, free text goes to the classifier.
+## Concatenating them meant ~90% of the volume was being sent through an LLM
+## that had nothing to decide, which is both wasted spend and a source of
+## drift the checklist can't actually suffer from.
+produce_checklist_raw <- if ("produce_checklist" %in% names(df)) as.character(df$produce_checklist) else NULL
+produce_freetext_raw  <- if ("produce_other" %in% names(df)) as.character(df$produce_other) else NULL
 
-if (!is.null(produce_combined)) {
-  produce_result <- classify_and_grow(produce_combined, vocab$produce_categories, vocab$produce_item_map, produce_dict_seed, domain = "produce", method = CLASSIFICATION_METHOD)
-  produce_long <- produce_result$long %>% mutate(response_id = row_id, .keep = "unused")
-  vocab$produce_categories <- produce_result$vocab
-  vocab$produce_item_map <- produce_result$item_map
-} else {
-  produce_long <- tibble()
-}
+## CHECKLIST PATH - direct lookup, no LLM, no regex, no cache writes.
+produce_checklist_long <- if (!is.null(produce_checklist_raw)) {
+  classify_checklist(produce_checklist_raw) %>%
+    mutate(response_id = row_id, source_type = "checklist_direct", .keep = "unused")
+} else tibble()
+
+## FREE-TEXT PATH - unchanged: classify, grow the vocabulary, cache.
+produce_freetext_long <- if (!is.null(produce_freetext_raw)) {
+  r <- classify_and_grow(produce_freetext_raw, vocab$produce_categories, vocab$produce_item_map,
+                         produce_dict_seed, domain = "produce", method = CLASSIFICATION_METHOD)
+  vocab$produce_categories <- r$vocab
+  vocab$produce_item_map   <- r$item_map
+  r$long %>% mutate(response_id = row_id, source_type = "freetext_classified", .keep = "unused")
+} else tibble()
+
+produce_long <- bind_rows(produce_checklist_long, produce_freetext_long)
+
+## Every category the checklist can produce must exist in the vocabulary,
+## including any legacy bucket the map routes to (lettuce_unspecified).
+vocab$produce_categories <- union(vocab$produce_categories,
+                                  unique(unlist(unname(checklist_map))))
 
 if ("shop_raw" %in% names(df)) {
   store_result <- classify_and_grow(df$shop_raw, vocab$store_categories, vocab$store_item_map, store_dict_seed, domain = "store", method = CLASSIFICATION_METHOD)
@@ -448,17 +568,56 @@ store_freq <- store_long %>%
   mutate(pct_of_cases = round(100 * n_cases / n_total, 1)) %>%
   add_wilson_ci(n_total)
 
+## External reference baselines from USDA ERS, for DISPLAY ONLY. These are
+## never fed into signal_ratio: ERS publishes pounds of per-capita
+## availability per year, while baseline_commonness is a 0-100 "percent of
+## people who ate this in a two-week period" scale. The two are not
+## convertible, so showing both side by side is honest and substituting one
+## for the other would not be. Reconciling the units is future work.
+EXTERNAL_BASELINES_PATH <- "baselines-external.json"
+
+external_baselines <- if (file.exists(EXTERNAL_BASELINES_PATH)) {
+  eb <- tryCatch(jsonlite::fromJSON(EXTERNAL_BASELINES_PATH, simplifyVector = FALSE),
+                 error = function(e) NULL)
+  if (is.null(eb$baselines)) list() else eb$baselines
+} else list()
+
+ers_reference <- function(cat) {
+  e <- external_baselines[[cat]]
+  if (is.null(e) || is.null(e$value_lb_per_year)) return(NA_character_)
+  sprintf("%.1f lb/yr (%s)", e$value_lb_per_year, e$source_year)
+}
+
 produce_signal <- produce_freq %>%
   mutate(baseline_pct = unlist(vocab$baseline_commonness)[category]) %>%
   filter(!is.na(baseline_pct)) %>%
   mutate(
     signal_ratio = round(pct_of_cases / baseline_pct, 2),
     signal_ratio_low = round(ci_low_pct / baseline_pct, 2),
-    signal_ratio_high = round(ci_high_pct / baseline_pct, 2)
+    signal_ratio_high = round(ci_high_pct / baseline_pct, 2),
+    baseline_confidence = vapply(category, function(c) {
+      v <- vocab$baseline_confidence[[c]]; if (is.null(v)) "unsourced" else as.character(v)
+    }, character(1)),
+    ers_ref = vapply(category, ers_reference, character(1)),
+    ## BASELINE SENSITIVITY BAND, author-estimated baselines only.
+    ## A flat +/-30% on the baseline, propagated through the ratio: because
+    ## the baseline is the DENOMINATOR, a larger baseline gives a smaller
+    ## ratio, hence the inversion below. Deliberately one flat width for
+    ## every estimate rather than a hand-tuned width per category - a
+    ## per-category width would imply we know which guesses are shakier
+    ## than others, and we don't yet. Refining that is a future improvement,
+    ## not a judgement being made here. ERS-sourced baselines get no band.
+    baseline_sens_low  = ifelse(baseline_confidence == "unsourced",
+                                round(pct_of_cases / (baseline_pct * 1.3), 2), NA_real_),
+    baseline_sens_high = ifelse(baseline_confidence == "unsourced",
+                                round(pct_of_cases / (baseline_pct * 0.7), 2), NA_real_)
   ) %>%
   # Sort by conservative lower-bound ratio, not the raw point estimate -
   # discounts small-n flukes, rewards foods elevated even pessimistically.
   arrange(desc(signal_ratio_low), desc(signal_ratio))
+
+n_ers_sourced <- sum(produce_signal$baseline_confidence == "exact_match")
+n_estimated   <- sum(produce_signal$baseline_confidence == "unsourced")
 ```
 
 ```{r derived-data}
@@ -572,15 +731,26 @@ compared to how often people eat it in an ordinary two-week period. A ratio
 above 1 means it's showing up more than you'd expect from typical diets.
 
 ```{r produce-signal-plot, fig.width=9, fig.height=6}
+## Two DIFFERENT uncertainties are drawn here and they must stay visually
+## distinct:
+##   - dark whiskers  = 95% Wilson CI on the case proportion (sampling error)
+##   - pale wide band = +/-30% on an author-estimated baseline (input error)
+## A category with a sourced ERS baseline gets no pale band, which is the
+## point: it makes "we guessed this denominator" visible at a glance.
 produce_signal %>%
   filter(n_cases >= 3) %>%
-  ggplot(aes(x = reorder(category, signal_ratio_low), y = signal_ratio, fill = signal_ratio)) +
-  geom_col() +
+  ggplot(aes(x = reorder(category, signal_ratio_low), y = signal_ratio)) +
+  geom_linerange(aes(ymin = baseline_sens_low, ymax = baseline_sens_high),
+                 linewidth = 6, colour = "#f0c9a8", na.rm = TRUE) +
+  geom_col(aes(fill = signal_ratio), width = 0.62) +
   scale_fill_viridis_c(option = "inferno", guide = "none") +
-  geom_errorbar(aes(ymin = signal_ratio_low, ymax = signal_ratio_high), width = 0.3, color = "gray30") +
+  geom_errorbar(aes(ymin = signal_ratio_low, ymax = signal_ratio_high),
+                width = 0.3, color = "gray30") +
   geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
   coord_flip() +
-  labs(title = "Produce Signal Ratio", subtitle = "Bars = point estimate, whiskers = 95% CI",
+  labs(title = "Produce Signal Ratio",
+       subtitle = paste0("Bars = point estimate  |  dark whiskers = 95% CI on the case %  |  ",
+                         "pale band = ±30% uncertainty on an estimated baseline"),
        x = NULL, y = "Signal ratio (case % / baseline %)") +
   theme_minimal(base_size = 13)
 ```
@@ -689,15 +859,65 @@ just the top 15 shown here).*
 ## Table 1: Produce Signal Ratio (Full Data)
 
 ```{r produce-signal-table}
-datatable(produce_signal, rownames = FALSE,
-          colnames = c("Food", "# cases", "% of cases", "CI low", "CI high", "Baseline %",
-                       "Signal ratio", "Ratio CI low", "Ratio CI high"),
-          options = list(pageLength = 10, order = list(list(7, "desc"))))
+## Column order here must match produce_signal's, so build the display frame
+## explicitly rather than relying on however mutate() happened to order it.
+produce_signal %>%
+  transmute(
+    category, n_cases, pct_of_cases, ci_low_pct, ci_high_pct,
+    baseline_pct,
+    baseline_confidence = ifelse(baseline_confidence == "exact_match",
+                                 "USDA ERS", "author estimate"),
+    ers_ref = ifelse(is.na(ers_ref), "—", ers_ref),
+    signal_ratio, signal_ratio_low, signal_ratio_high
+  ) %>%
+  datatable(
+    rownames = FALSE,
+    colnames = c("Food", "# cases", "% of cases", "CI low", "CI high",
+                 "Baseline % (used in ratio)", "Baseline source",
+                 "ERS reference (not used in ratio)",
+                 "Signal ratio", "Ratio CI low", "Ratio CI high"),
+    options = list(pageLength = 10, order = list(list(8, "desc")), scrollX = TRUE))
 ```
 
 *CI columns are a 95% confidence interval — small sample sizes mean wide
 ranges. If the "Ratio CI low" column is still above 1, that's a stronger
 lead than the point estimate alone.*
+
+### Where these baselines come from
+
+The signal ratio divides how often cases report a food by a **baseline** —
+how commonly people eat it normally. That denominator drives every number
+in this table, so it's worth being explicit about where it comes from.
+
+```{r baseline-provenance-note, results="asis"}
+cat(sprintf(
+"Of the %d foods below, **%d have a baseline sourced from USDA ERS** and
+**%d rest on the author's own estimate**. Both are labeled in the
+\"Baseline source\" column.\n\n", n_ers_sourced + n_estimated, n_ers_sourced, n_estimated))
+```
+
+- **Author estimates** are exactly that — considered guesses, not
+  measurements, and not derived from any survey. They carry a **pale ±30%
+  band** on the chart above to show roughly how much the ratio would move if
+  the guess were off by that much. The band is one flat width for every
+  estimate; pretending to know which guesses are shakier than others would
+  be false precision.
+- **USDA ERS** values come from the
+  [Food Availability (Per Capita) Data System](https://www.ers.usda.gov/data-products/food-availability-per-capita-data-system),
+  refreshed monthly into `baselines-external.json`.
+
+**The ERS column is shown but not yet used**, and the reason is a real
+limitation rather than an oversight. ERS publishes *pounds of food available
+per person per year*; the baseline this ratio needs is *the share of people
+who ate a food in a two-week window*. Those measure different things and
+cannot be converted into one another — 19 lb of tomatoes a year could be
+everyone eating a little or a few people eating a lot. Substituting one for
+the other would change every ratio on this page for no reason but a change
+of units. Reconciling them properly is open work; until then both numbers
+are shown side by side so the gap is visible rather than hidden.
+
+Foods without any baseline at all don't appear in this table — they're still
+counted in *All produce mentioned* further down.
 
 ## Table 2: Cases by State (Full Data)
 

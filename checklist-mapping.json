@@ -1,0 +1,44 @@
+{
+  "_comment": "Static map from exact Google Form checklist option text to category slug. Checklist answers are already category-shaped, so they are resolved by direct lookup and NEVER sent to the LLM classifier or the regex fallback - that path is reserved for free text. Hand-maintained: if an option is added to the form, add it here or ingestion will fail loudly rather than silently guess.",
+  "form_versions": {
+    "v0": {
+      "until": "2026-07-13T14:00:00",
+      "note": "Original checklist. Offered unqualified 'Iceberg lettuce' and 'Romaine lettuce' with no whole-head vs prepackaged distinction."
+    },
+    "v1": {
+      "from": "2026-07-13T14:00:00",
+      "note": "Lettuce split into (head) and (prepackaged) variants, and mesclun/spring mix added."
+    },
+    "cutoff_evidence": "Derived from the data, not assumed: the last response selecting an unqualified lettuce option is 2026-07-13 12:50:56 and the first selecting a qualified one is 2026-07-13 16:21:12. Zero overlap, so the form changed inside that 3.5-hour window; 14:00 sits in the gap."
+  },
+  "mapping": {
+    "avocado": "avocado",
+    "bagged salad mix / salad kit": "salad_bagged",
+    "bell peppers": "bell_pepper",
+    "broccoli": "broccoli",
+    "cabbage": "cabbage",
+    "carrots": "carrot",
+    "cauliflower": "cauliflower",
+    "celery": "celery",
+    "cucumber": "cucumber",
+    "fast-food or restaurant salad": "salad_restaurant",
+    "fresh basil": "basil",
+    "fresh cilantro": "cilantro",
+    "fresh dill": "dill",
+    "fresh mint": "mint",
+    "green onions / scallions": "green_onion",
+    "iceberg lettuce": "lettuce_unspecified",
+    "iceberg lettuce (head)": "iceberg_head",
+    "iceberg lettuce (prepackaged)": "iceberg_prepackaged",
+    "mesclun / spring mix": "mesclun_spring_mix",
+    "pre-packaged veggie tray (with dip)": "veggie_tray",
+    "raspberries": "raspberries",
+    "romaine lettuce": "lettuce_unspecified",
+    "romaine lettuce (head)": "romaine_head",
+    "romaine lettuce (prepackaged)": "romaine_prepackaged",
+    "snow peas": "snow_peas",
+    "strawberries": "strawberries",
+    "sugar snap peas": "snap_peas",
+    "tomatoes": "tomato"
+  }
+}
