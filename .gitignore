@@ -1,0 +1,55 @@
+# --- Secrets -----------------------------------------------------------
+# .Rhistory is first for a reason: R appends every console line to it in
+# plaintext, so a single Sys.setenv(ANTHROPIC_API_KEY = "sk-ant-...") typed
+# at the prompt writes a live credential to disk. That is exactly how the
+# previous key leaked. Set keys in ~/.Renviron instead, never at the console.
+.Rhistory
+.Rapp.history
+.RData
+.Rproj.user/
+.Renviron
+.env
+.env.*
+*.pem
+*.key
+
+# --- R / RStudio working files -----------------------------------------
+.Rproj.user
+*.Rproj
+.Ruserdata
+.httr-oauth
+renv/library/
+renv/staging/
+
+# --- Analysis outputs written by cyclospora_outbreak_analysis.R --------
+# These are regenerated on every local run. Committing them means stale
+# numbers can outlive the data they came from.
+# NOTE: deliberately specific, not *.csv - so that any CSV added on purpose
+# as source data still gets tracked.
+produce_frequency.csv
+store_frequency.csv
+produce_signal_ratio.csv
+duration_summary.csv
+epi_curve_data.csv
+high_confidence_reports.csv
+uncategorized_produce_to_review.csv
+uncategorized_stores_to_review.csv
+produce_signal.png
+epi_curve.png
+
+# --- Atomic-write temp files -------------------------------------------
+# save_vocabulary() and refresh-external-baselines.R write to a dotfile in
+# the target directory then rename over it. A killed process can leave one
+# behind; it must never be committed.
+.category_vocabulary*.json
+.baselines-external*.json
+
+# --- OS / editor -------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
