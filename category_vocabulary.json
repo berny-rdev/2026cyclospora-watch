@@ -1,6 +1,6 @@
 {
-  "produce_categories": ["apples", "arugula", "avocado", "bananas", "basil", "beef_burger", "bell_pepper", "bibb_lettuce", "blackberries", "blueberries", "broccoli", "cabbage", "carrot", "cauliflower", "celery", "cherries", "cilantro", "citrus", "coleslaw", "corn", "cucumber", "dill", "eggs", "frozen_vegetables", "fruit_salad_prepackaged", "grapes", "green_onion", "iceberg_head", "iceberg_prepackaged", "kiwi", "leaf_lettuce", "leek", "lettuce", "lettuce_unspecified", "mango", "melon", "mesclun_spring_mix", "mint", "no_specific_item", "onions", "parsley", "pico_de_gallo", "pineapple", "potatoes", "radish", "raspberries", "raw_bar_seafood", "red_onion", "romaine_head", "romaine_prepackaged", "salad_bagged", "salad_restaurant", "snap_peas", "snow_peas", "spinach", "stone_fruit", "strawberries", "sub_sandwich", "sushi", "tacos", "tomato", "veggie_tray"],
-  "store_categories": ["acme", "albertsons", "aldi", "amazon_fresh", "beyond_juicery", "big_y", "bjs", "block_brewing_company", "brewsters_new_buffalo", "bucharest_grill", "buffalo_wild_wings", "burgatory", "burrito_beach", "cafe_hollander", "casual_dining", "chicago_hospital_cafeteria", "chick_fil_a", "chipotle", "common_man", "costco", "country_grocer", "culvers", "dairy_queen", "dominos", "don_barriga", "elisa", "family_fare", "farmers_fridge", "farmhouse_deli", "fast_casual", "food_lion", "franks_pizza_and_subs", "frontera", "frontier_inn", "giant", "giant_eagle", "granor_farms", "grocery_outlet", "hannaford", "happy_friar", "harbor_hotel", "harris_teeter", "hellofresh", "ichop", "in_n_out", "ipotato", "iron_bar", "jersey_mikes", "jewel_osco", "jimmy_johns", "kfc", "kroger", "legal_seafoods", "lidl", "local_farmers_market", "local_restaurant", "main_eatery", "marianos", "marilena", "market_32", "market_basket", "martins", "mcdonalds", "meijer", "mizu_sushi", "motomedi", "new_dumpling_and_sushi_house", "novo_food_hall", "olive_garden", "panda_express", "panera", "papa_johns", "piada", "playa_bowls", "post_boy", "potbelly", "publix", "qdoba", "quiktrip", "raising_canes", "red_robin", "regional_grocery", "roche_brothers", "rodneys_oyster_house", "safeway", "salt_line", "salty_dog_bar_and_grill", "savmor", "schnucks", "sheetz", "smiths", "sonic", "sprouts", "stater_bros", "subway", "sunset_foods", "super_saver", "sweetgreen", "taco_bell", "target", "taylor_farms", "texas_roadhouse", "tom_thumb", "tovala", "trader_joes", "tumbleweed", "uncle_g", "unknown_source", "unspecified_grocery_store", "unspecified_restaurant", "unspecified_source", "walmart", "wegmans", "wendy_s", "whole_foods"],
+  "produce_categories": ["apples", "arugula", "avocado", "bananas", "basil", "beef_burger", "bell_pepper", "bibb_lettuce", "blackberries", "blueberries", "broccoli", "cabbage", "carrot", "cauliflower", "celery", "cherries", "cilantro", "citrus", "coleslaw", "corn", "cucumber", "dill", "eggs", "frozen_vegetables", "fruit_salad_prepackaged", "grapes", "green_onion", "iceberg_head", "iceberg_prepackaged", "kiwi", "leaf_lettuce", "leek", "lettuce", "lettuce_unspecified", "mango", "melon", "mesclun_spring_mix", "mint", "no_specific_item", "onions", "parsley", "pico_de_gallo", "pineapple", "potatoes", "radish", "raspberries", "raw_bar_seafood", "red_onion", "romaine_head", "romaine_prepackaged", "salad_bagged", "salad_restaurant", "snap_peas", "snow_peas", "spinach", "stone_fruit", "strawberries", "sub_sandwich", "sushi", "tacos", "tomato", "veggie_tray", "tabouli"],
+  "store_categories": ["acme", "albertsons", "aldi", "amazon_fresh", "beyond_juicery", "big_y", "bjs", "block_brewing_company", "brewsters_new_buffalo", "bucharest_grill", "buffalo_wild_wings", "burgatory", "burrito_beach", "cafe_hollander", "casual_dining", "chicago_hospital_cafeteria", "chick_fil_a", "chipotle", "common_man", "costco", "country_grocer", "culvers", "dairy_queen", "dominos", "don_barriga", "elisa", "family_fare", "farmers_fridge", "farmhouse_deli", "fast_casual", "food_lion", "franks_pizza_and_subs", "frontera", "frontier_inn", "giant", "giant_eagle", "granor_farms", "grocery_outlet", "hannaford", "happy_friar", "harbor_hotel", "harris_teeter", "hellofresh", "ichop", "in_n_out", "ipotato", "iron_bar", "jersey_mikes", "jewel_osco", "jimmy_johns", "kfc", "kroger", "legal_seafoods", "lidl", "local_farmers_market", "local_restaurant", "main_eatery", "marianos", "marilena", "market_32", "market_basket", "martins", "mcdonalds", "meijer", "mizu_sushi", "motomedi", "new_dumpling_and_sushi_house", "novo_food_hall", "olive_garden", "panda_express", "panera", "papa_johns", "piada", "playa_bowls", "post_boy", "potbelly", "publix", "qdoba", "quiktrip", "raising_canes", "red_robin", "regional_grocery", "roche_brothers", "rodneys_oyster_house", "safeway", "salt_line", "salty_dog_bar_and_grill", "savmor", "schnucks", "sheetz", "smiths", "sonic", "sprouts", "stater_bros", "subway", "sunset_foods", "super_saver", "sweetgreen", "taco_bell", "target", "taylor_farms", "texas_roadhouse", "tom_thumb", "tovala", "trader_joes", "tumbleweed", "uncle_g", "unknown_source", "unspecified_grocery_store", "unspecified_restaurant", "unspecified_source", "walmart", "wegmans", "wendy_s", "whole_foods", "raleys", "village_garden", "ralphs", "sams_club", "paisanos_and_lost_dog_cafe", "burger_bus", "wawa", "atomic_wings", "dar525", "chez_oskar", "court_st_grocer", "freddys", "tazikis", "agawam_diner", "campfire_grille"],
   "baseline_commonness": {
     "romaine_head": 15,
     "romaine_prepackaged": 20,
@@ -145,7 +145,12 @@
     "bibb lettuce head": "bibb_lettuce",
     "tomatoes and maybe lettuce": "tomato",
     "red onions": "red_onion",
-    "bagged (well, boxed, technically) spinach": "spinach"
+    "bagged (well, boxed, technically) spinach": "spinach",
+    "shredded lettuce on food from culver's": "lettuce_unspecified",
+    "and jimmy john's (not salads)": "lettuce_unspecified",
+    "trader joe's tabouli": "tabouli",
+    "a sandwich that contained onions": "onions",
+    "pre-chopped/packaged": "no_specific_item"
   },
   "store_item_map": {
     "kroger": "kroger",
@@ -310,7 +315,27 @@
     "motomedi in amarillo": "motomedi",
     "mcdonald's (i work here. i eat here a lot.) taco bell": "taco_bell",
     "detroit mi: taco bell": "taco_bell",
-    "trader joe's wichita kansas": "trader_joes"
+    "trader joe's wichita kansas": "trader_joes",
+    "raley's": "raleys",
+    "village garden (all in cuyahoga falls, oh)": "village_garden",
+    "culver's": "culvers",
+    "ralph's": "ralphs",
+    "sam's club": "sams_club",
+    "paisano's and lost dog cafe": "paisanos_and_lost_dog_cafe",
+    "burger bus": "burger_bus",
+    "jimmy john's 7/6.": "jimmy_johns",
+    "wendy's": "wendy_s",
+    "wawa": "wawa",
+    "food coop": "unspecified_grocery_store",
+    "atomic wings": "atomic_wings",
+    "dar525": "dar525",
+    "chez oskar": "chez_oskar",
+    "court st grocer": "court_st_grocer",
+    "freddy's": "freddys",
+    "taziki's": "tazikis",
+    "tx": "unspecified_source",
+    "agawam diner (rowley, ma)": "agawam_diner",
+    "campfire grille (bridgton, me)": "campfire_grille"
   },
   "baseline_source": {
     "A Sandwich That Contained Onions": "author_estimate",
