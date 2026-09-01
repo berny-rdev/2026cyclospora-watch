@@ -142,8 +142,37 @@ load_vocabulary <- function(path, seed_produce, seed_store, seed_baseline) {
     # baseline_source: "USDA ERS Food Availability" | "author_estimate"
     # baseline_confidence: "exact_match" | "unsourced"
     baseline_source     = if (!is.null(v) && !is.null(v$baseline_source)) as.list(v$baseline_source) else list(),
-    baseline_confidence = if (!is.null(v) && !is.null(v$baseline_confidence)) as.list(v$baseline_confidence) else list()
+    baseline_confidence = if (!is.null(v) && !is.null(v$baseline_confidence)) as.list(v$baseline_confidence) else list(),
+    # CATEGORY provenance (distinct from the BASELINE provenance above).
+    # Must be loaded, not just carried over on save: stamp_category_provenance()
+    # below adds to these, and if they arrived empty the save-time merge would
+    # treat the partial in-memory copy as authoritative and drop the rest.
+    category_source_type      = if (!is.null(v) && !is.null(v$category_source_type)) as.list(v$category_source_type) else list(),
+    active_since_form_version = if (!is.null(v) && !is.null(v$active_since_form_version)) as.list(v$active_since_form_version) else list(),
+    checklist_label           = if (!is.null(v) && !is.null(v$checklist_label)) as.list(v$checklist_label) else list(),
+    category_notes            = if (!is.null(v) && !is.null(v$category_notes)) as.list(v$category_notes) else list()
   )
+}
+
+## Stamps provenance on any category that lacks it.
+##
+## Deliberately here rather than inside classify_and_grow(): categories can
+## enter the vocabulary by several routes - the LLM minting a new one, the
+## checklist union, a hand edit to the file - and only a sweep catches all of
+## them. Existing labels are never overwritten, so this is purely additive and
+## self-healing. Without it the provenance fields go stale the first time
+## anyone reports a new food or store, which is exactly what happened to the
+## 16 categories added after the initial backfill.
+stamp_category_provenance <- function(vocab, checklist_categories = character(0)) {
+  allc <- c(vocab$produce_categories, vocab$store_categories)
+  for (cat in setdiff(allc, names(vocab$category_source_type))) {
+    vocab$category_source_type[[cat]] <-
+      if (cat %in% checklist_categories) "checklist_direct" else "freetext_classified"
+  }
+  for (cat in setdiff(allc, names(vocab$active_since_form_version))) {
+    vocab$active_since_form_version[[cat]] <- "v1"
+  }
+  vocab
 }
 
 # MERGE-ON-WRITE, not clobber-on-write.
@@ -189,6 +218,12 @@ save_vocabulary <- function(vocab, path) {
       as_list_or_empty(vocab$baseline_source), as_list_or_empty(on_disk$baseline_source))
     merged$baseline_confidence <- modifyList(
       as_list_or_empty(vocab$baseline_confidence), as_list_or_empty(on_disk$baseline_confidence))
+    # Same direction as the maps above: on-disk wins for keys both sides have,
+    # while categories stamped for the first time in this run are kept.
+    for (k in c("category_source_type", "active_since_form_version",
+                "checklist_label", "category_notes")) {
+      merged[[k]] <- modifyList(as_list_or_empty(vocab[[k]]), as_list_or_empty(on_disk[[k]]))
+    }
   }
 
   # ATOMIC WRITE. write_json() straight onto `path` leaves a truncated file
@@ -523,6 +558,11 @@ produce_long <- bind_rows(produce_checklist_long, produce_freetext_long)
 ## including any legacy bucket the map routes to (lettuce_unspecified).
 vocab$produce_categories <- union(vocab$produce_categories,
                                   unique(unlist(unname(checklist_map))))
+
+## Label any category that arrived without provenance - newly minted by the
+## classifier, pulled in by the checklist union, or added by hand. Runs after
+## every route that can add one, and never overwrites an existing label.
+vocab <- stamp_category_provenance(vocab, unique(unlist(unname(checklist_map))))
 
 if ("shop_raw" %in% names(df)) {
   store_result <- classify_and_grow(df$shop_raw, vocab$store_categories, vocab$store_item_map, store_dict_seed, domain = "store", method = CLASSIFICATION_METHOD)

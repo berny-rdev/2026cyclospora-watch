@@ -30,8 +30,7 @@
     "radish": 6,
     "mint": 5,
     "salad_bagged": 25,
-    "salad_restaurant": 20,
-    "lettuce": 55
+    "salad_restaurant": 20
   },
   "produce_item_map": {
     "bagged salad mix / salad kit": "salad_bagged",
@@ -652,7 +651,23 @@
     "walmart": "freetext_classified",
     "wegmans": "freetext_classified",
     "wendy_s": "freetext_classified",
-    "whole_foods": "freetext_classified"
+    "whole_foods": "freetext_classified",
+    "tabouli": "freetext_classified",
+    "raleys": "freetext_classified",
+    "village_garden": "freetext_classified",
+    "ralphs": "freetext_classified",
+    "sams_club": "freetext_classified",
+    "paisanos_and_lost_dog_cafe": "freetext_classified",
+    "burger_bus": "freetext_classified",
+    "wawa": "freetext_classified",
+    "atomic_wings": "freetext_classified",
+    "dar525": "freetext_classified",
+    "chez_oskar": "freetext_classified",
+    "court_st_grocer": "freetext_classified",
+    "freddys": "freetext_classified",
+    "tazikis": "freetext_classified",
+    "agawam_diner": "freetext_classified",
+    "campfire_grille": "freetext_classified"
   },
   "checklist_label": {
     "avocado": "avocado",
@@ -860,9 +875,26 @@
     "walmart": "v1",
     "wegmans": "v1",
     "wendy_s": "v1",
-    "whole_foods": "v1"
+    "whole_foods": "v1",
+    "tabouli": "v1",
+    "raleys": "v1",
+    "village_garden": "v1",
+    "ralphs": "v1",
+    "sams_club": "v1",
+    "paisanos_and_lost_dog_cafe": "v1",
+    "burger_bus": "v1",
+    "wawa": "v1",
+    "atomic_wings": "v1",
+    "dar525": "v1",
+    "chez_oskar": "v1",
+    "court_st_grocer": "v1",
+    "freddys": "v1",
+    "tazikis": "v1",
+    "agawam_diner": "v1",
+    "campfire_grille": "v1"
   },
   "category_notes": {
-    "lettuce_unspecified": "Legacy bucket. The v0 checklist offered 'Iceberg lettuce' and 'Romaine lettuce' with no whole-head vs prepackaged distinction; 12 responses (20 selections) chose those before the form was split on 2026-07-13. Previously these were assigned to *_head, asserting a form the respondent never gave. Routed here instead so the ambiguity is visible rather than fabricated."
+    "lettuce_unspecified": "Legacy bucket. The v0 checklist offered 'Iceberg lettuce' and 'Romaine lettuce' with no whole-head vs prepackaged distinction; 12 responses (20 selections) chose those before the form was split on 2026-07-13. Previously these were assigned to *_head, asserting a form the respondent never gave. Routed here instead so the ambiguity is visible rather than fabricated.",
+    "lettuce": "Free-text catch-all for mentions naming lettuce with NEITHER type nor form (e.g. 'mcdonalds burger with lettuce'). Distinct from lettuce_unspecified, where the v0 checklist told us the type but not the form. Baseline deliberately REMOVED: it held 55, the obsolete flat value from before the granular migration, while its siblings divide by 10-20 - so these responses were divided by ~4x their neighbours' denominator and published a signal ratio of 0.04. Without a baseline it drops out of the signal table like the other unbaselined categories and still counts in 'All produce mentioned'. Do not re-add a baseline without deciding what type mix it represents, which is not knowable from the responses."
   }
 }
