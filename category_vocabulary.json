@@ -1,5 +1,5 @@
 {
-  "produce_categories": ["apples", "arugula", "avocado", "bananas", "basil", "beef_burger", "bell_pepper", "bibb_lettuce", "blackberries", "blueberries", "broccoli", "cabbage", "carrot", "cauliflower", "celery", "cherries", "cilantro", "citrus", "coleslaw", "corn", "cucumber", "dill", "eggs", "frozen_vegetables", "fruit_salad_prepackaged", "grapes", "green_onion", "iceberg_head", "iceberg_prepackaged", "kiwi", "leaf_lettuce", "leek", "lettuce", "lettuce_unspecified", "mango", "melon", "mesclun_spring_mix", "mint", "no_specific_item", "onions", "parsley", "pico_de_gallo", "pineapple", "potatoes", "radish", "raspberries", "raw_bar_seafood", "red_onion", "romaine_head", "romaine_prepackaged", "salad_bagged", "salad_restaurant", "snap_peas", "snow_peas", "spinach", "stone_fruit", "strawberries", "sub_sandwich", "sushi", "tacos", "tomato", "veggie_tray", "tabouli"],
+  "produce_categories": ["apples", "arugula", "avocado", "bananas", "basil", "beef_burger", "bell_pepper", "bibb_lettuce", "blackberries", "blueberries", "broccoli", "cabbage", "carrot", "cauliflower", "celery", "cherries", "cilantro", "citrus", "coleslaw", "corn", "cucumber", "dill", "eggs", "frozen_vegetables", "fruit_salad_prepackaged", "grapes", "green_onion", "iceberg_head", "iceberg_prepackaged", "kiwi", "leaf_lettuce", "leek", "lettuce_untyped", "lettuce_unspecified", "mango", "melon", "mesclun_spring_mix", "mint", "no_specific_item", "onions", "parsley", "pico_de_gallo", "pineapple", "potatoes", "radish", "raspberries", "raw_bar_seafood", "red_onion", "romaine_head", "romaine_prepackaged", "salad_bagged", "salad_restaurant", "snap_peas", "snow_peas", "spinach", "stone_fruit", "strawberries", "sub_sandwich", "sushi", "tacos", "tomato", "veggie_tray", "tabouli"],
   "store_categories": ["acme", "albertsons", "aldi", "amazon_fresh", "beyond_juicery", "big_y", "bjs", "block_brewing_company", "brewsters_new_buffalo", "bucharest_grill", "buffalo_wild_wings", "burgatory", "burrito_beach", "cafe_hollander", "casual_dining", "chicago_hospital_cafeteria", "chick_fil_a", "chipotle", "common_man", "costco", "country_grocer", "culvers", "dairy_queen", "dominos", "don_barriga", "elisa", "family_fare", "farmers_fridge", "farmhouse_deli", "fast_casual", "food_lion", "franks_pizza_and_subs", "frontera", "frontier_inn", "giant", "giant_eagle", "granor_farms", "grocery_outlet", "hannaford", "happy_friar", "harbor_hotel", "harris_teeter", "hellofresh", "ichop", "in_n_out", "ipotato", "iron_bar", "jersey_mikes", "jewel_osco", "jimmy_johns", "kfc", "kroger", "legal_seafoods", "lidl", "local_farmers_market", "local_restaurant", "main_eatery", "marianos", "marilena", "market_32", "market_basket", "martins", "mcdonalds", "meijer", "mizu_sushi", "motomedi", "new_dumpling_and_sushi_house", "novo_food_hall", "olive_garden", "panda_express", "panera", "papa_johns", "piada", "playa_bowls", "post_boy", "potbelly", "publix", "qdoba", "quiktrip", "raising_canes", "red_robin", "regional_grocery", "roche_brothers", "rodneys_oyster_house", "safeway", "salt_line", "salty_dog_bar_and_grill", "savmor", "schnucks", "sheetz", "smiths", "sonic", "sprouts", "stater_bros", "subway", "sunset_foods", "super_saver", "sweetgreen", "taco_bell", "target", "taylor_farms", "texas_roadhouse", "tom_thumb", "tovala", "trader_joes", "tumbleweed", "uncle_g", "unknown_source", "unspecified_grocery_store", "unspecified_restaurant", "unspecified_source", "walmart", "wegmans", "wendy_s", "whole_foods", "raleys", "village_garden", "ralphs", "sams_club", "paisanos_and_lost_dog_cafe", "burger_bus", "wawa", "atomic_wings", "dar525", "chez_oskar", "court_st_grocer", "freddys", "tazikis", "agawam_diner", "campfire_grille"],
   "baseline_commonness": {
     "romaine_head": 15,
@@ -68,9 +68,9 @@
     "sugar snap peas": "snap_peas",
     "blackberries": "blackberries",
     "broccoli": "broccoli",
-    "mcdonalds burger with lettuce": "lettuce",
+    "mcdonalds burger with lettuce": "lettuce_untyped",
     "and onions": "onions",
-    "lettuce served on side of mexican food": "lettuce",
+    "lettuce served on side of mexican food": "lettuce_untyped",
     "romaine lettuce (head)": "romaine_head",
     "romaine lettuce (prepackaged)": "romaine_prepackaged",
     "iceberg lettuce (prepackaged)": "iceberg_prepackaged",
@@ -80,8 +80,8 @@
     "mango": "mango",
     "melons": "melon",
     "taco bell burrito supreme": "tacos",
-    "*likely* the lettuce in it": "lettuce",
-    "fairly certain i got it from eating lettuce at taco bell. my partner and i both got sick with the same symptoms at the same time. he got a stool test done and tested positive. the only thing we both ate that was a \"red flag\" produce was lettuce on the taco bell items. we had taco bell on june 29th.": "lettuce",
+    "*likely* the lettuce in it": "lettuce_untyped",
+    "fairly certain i got it from eating lettuce at taco bell. my partner and i both got sick with the same symptoms at the same time. he got a stool test done and tested positive. the only thing we both ate that was a \"red flag\" produce was lettuce on the taco bell items. we had taco bell on june 29th.": "lettuce_untyped",
     "cauliflower": "cauliflower",
     "steamed vegetables in bag": "frozen_vegetables",
     "nothing that stands out": "no_specific_item",
@@ -363,7 +363,7 @@
     "kiwi": "author_estimate",
     "leaf_lettuce": "author_estimate",
     "leek": "author_estimate",
-    "lettuce": "author_estimate",
+    "lettuce_untyped": "author_estimate",
     "mango": "author_estimate",
     "melon": "USDA ERS Food Availability",
     "mesclun_spring_mix": "author_estimate",
@@ -424,7 +424,7 @@
     "kiwi": "unsourced",
     "leaf_lettuce": "unsourced",
     "leek": "unsourced",
-    "lettuce": "unsourced",
+    "lettuce_untyped": "unsourced",
     "mango": "unsourced",
     "melon": "exact_match",
     "mesclun_spring_mix": "unsourced",
@@ -486,7 +486,7 @@
     "kiwi": "freetext_classified",
     "leaf_lettuce": "freetext_classified",
     "leek": "freetext_classified",
-    "lettuce": "freetext_classified",
+    "lettuce_untyped": "freetext_classified",
     "lettuce_unspecified": "checklist_direct",
     "mango": "freetext_classified",
     "melon": "freetext_classified",
@@ -681,7 +681,7 @@
     "kiwi": "v1",
     "leaf_lettuce": "v1",
     "leek": "v1",
-    "lettuce": "v1",
+    "lettuce_untyped": "v1",
     "lettuce_unspecified": "v0",
     "mango": "v1",
     "melon": "v1",
@@ -874,6 +874,6 @@
   },
   "category_notes": {
     "lettuce_unspecified": "Legacy bucket. The v0 checklist offered 'Iceberg lettuce' and 'Romaine lettuce' with no whole-head vs prepackaged distinction; 12 responses (20 selections) chose those before the form was split on 2026-07-13. Previously these were assigned to *_head, asserting a form the respondent never gave. Routed here instead so the ambiguity is visible rather than fabricated.",
-    "lettuce": "Free-text catch-all for mentions naming lettuce with NEITHER type nor form (e.g. 'mcdonalds burger with lettuce'). Distinct from lettuce_unspecified, where the v0 checklist told us the type but not the form. Baseline deliberately REMOVED: it held 55, the obsolete flat value from before the granular migration, while its siblings divide by 10-20 - so these responses were divided by ~4x their neighbours' denominator and published a signal ratio of 0.04. Without a baseline it drops out of the signal table like the other unbaselined categories and still counts in 'All produce mentioned'. Do not re-add a baseline without deciding what type mix it represents, which is not knowable from the responses."
+    "lettuce_untyped": "Free-text catch-all for mentions naming lettuce with NEITHER type nor form (e.g. 'mcdonalds burger with lettuce'). Distinct from lettuce_unspecified, where the v0 checklist told us the type but not the form. Baseline deliberately REMOVED: it held 55, the obsolete flat value from before the granular migration, while its siblings divide by 10-20 - so these responses were divided by ~4x their neighbours' denominator and published a signal ratio of 0.04. Without a baseline it drops out of the signal table like the other unbaselined categories and still counts in 'All produce mentioned'. Do not re-add a baseline without deciding what type mix it represents, which is not knowable from the responses. Renamed from `lettuce` so it is not mistaken for the retired flat category of that name."
   }
 }
