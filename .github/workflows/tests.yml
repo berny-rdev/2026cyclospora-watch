@@ -1,0 +1,52 @@
+name: Tests
+
+# Separate from the publishing workflow on purpose. This one never commits and
+# never renders - it only runs the unit suite, so a failure here is a signal to
+# look, not a stale page. It also installs five packages instead of thirteen:
+# the suite exercises the R/ modules, which need no pandoc, ggplot2 or maps.
+
+on:
+  push:
+    paths:
+      - 'R/**'
+      - 'tests/**'
+      - 'checklist-mapping.json'
+      - '.github/workflows/tests.yml'
+  pull_request:
+  workflow_dispatch: {}
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # The suite asserts that punctuation normalisation actually works, which
+      # it cannot under a C locale - the exact trap assert_utf8_locale() guards.
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev
+
+      - name: Install R packages
+        run: >
+          Rscript -e 'install.packages(c("testthat","dplyr","tidyr","stringr","purrr","tibble","jsonlite"))'
+
+      # No API key and no network: the suite must not reach the Anthropic API or
+      # the Google Sheet. If a test ever needs either, it belongs somewhere else.
+      - name: Run unit tests
+        run: Rscript tests/run-tests.R
