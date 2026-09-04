@@ -49,11 +49,23 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # required for LLM classification (CLASSIFICATION_METHOD = "llm" in index.Rmd); falls back to regex automatically if unset
         run: |
           Rscript -e 'rmarkdown::render("index.Rmd", output_file = "index.html")'
+      # Between rendering and committing, on purpose. Every way this pipeline
+      # degrades is silent - a partial sheet read, an API key that stopped
+      # working, a truncated render - and all three produce a page that looks
+      # fine and replaces a better one. This compares run-manifest.json against
+      # the committed previous run and exits non-zero to stop the commit.
+      #
+      # A failure here means "the page did not update, go look", which is a much
+      # better outcome than a quietly worse page. The previous index.html stays
+      # live in the meantime.
+      - name: Guard against publishing a degraded render
+        run: Rscript scripts/check-render.R
+
       - name: Commit and push updated page
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add index.html category_vocabulary.json
+          git add index.html category_vocabulary.json run-manifest.json
           git diff --quiet --cached || git commit -m "Auto-update report $(date -u +'%Y-%m-%d %H:%M UTC')"
           git pull --rebase origin main
           git push

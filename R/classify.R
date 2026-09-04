@@ -26,6 +26,32 @@ merge_categories <- function(known_categories, mapping) {
 # ones for genuinely new foods instead of dumping them in "other". Falls
 # back to regex automatically if the API call fails.
 
+## Run-health counters.
+##
+## Both fallbacks below are recoverable by design - the pipeline never crashes
+## on a missing key or a failed batch, it quietly degrades to the regex seed
+## dictionaries. That is the right runtime behaviour and the wrong thing to
+## publish silently: with the LLM unavailable the store vocabulary collapses
+## from ~127 categories to the 16 the seed regexes can match, and the page
+## still renders as though nothing happened. Counting the events lets the
+## pre-commit guard see it. See scripts/check-render.R.
+CLASSIFICATION_EVENTS <- new.env(parent = emptyenv())
+
+reset_classification_events <- function() {
+  CLASSIFICATION_EVENTS$no_api_key   <- 0L
+  CLASSIFICATION_EVENTS$batch_failed <- 0L
+  invisible(NULL)
+}
+reset_classification_events()
+
+record_classification_event <- function(kind) {
+  prev <- if (is.null(CLASSIFICATION_EVENTS[[kind]])) 0L else CLASSIFICATION_EVENTS[[kind]]
+  CLASSIFICATION_EVENTS[[kind]] <- prev + 1L
+  invisible(NULL)
+}
+
+classification_events <- function() as.list(CLASSIFICATION_EVENTS)
+
 call_claude_classify_dynamic <- function(items, known_categories, domain = c("produce", "store"),
                                           api_key = Sys.getenv("ANTHROPIC_API_KEY"),
                                           model = "claude-haiku-4-5-20251001") {
@@ -35,6 +61,7 @@ call_claude_classify_dynamic <- function(items, known_categories, domain = c("pr
   ## a real change in output quality and previously left no trace in the
   ## Action log. An empty batch is not a problem and stays quiet.
   if (identical(api_key, "")) {
+    record_classification_event("no_api_key")
     warning("ANTHROPIC_API_KEY not set - falling back to regex classification.")
     return(NULL)
   }
@@ -117,6 +144,7 @@ classify_items_dynamic <- function(items, known_categories, dict, domain = c("pr
   }
   result <- call_claude_classify_dynamic(items, known_categories, domain = domain)
   if (is.null(result) || length(result) == 0) {
+    record_classification_event("batch_failed")
     warning("LLM classification failed - falling back to regex dictionary for this batch.")
     mapping <- setNames(map_chr(items, ~ regex_classify(.x, dict)), items)
     return(list(mapping = mapping, vocab = merge_categories(known_categories, mapping)))

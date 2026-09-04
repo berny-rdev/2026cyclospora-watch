@@ -28,7 +28,8 @@ source("R/text-normalize.R")       # normalize_punct, split_delims, is_negation,
 source("R/vocabulary-io.R")        # read/load/save vocabulary, stamp_category_provenance
 source("R/checklist.R")            # checklist_map + classify_checklist
 source("R/classify.R")             # regex + LLM classification, classify_and_grow
-source("R/stats.R")                # wilson_ci, add_wilson_ci
+source("R/stats.R")                 # wilson_ci, add_wilson_ci
+source("R/run-manifest.R")          # build/write run-manifest.json
 source("R/vocabulary-integrity.R") # assert_utf8_locale, check_vocabulary_integrity
 
 ## Runs before any text is read: under a non-UTF-8 locale normalize_punct()
@@ -667,4 +668,18 @@ product lots — this page can't do that part.
 # add a category has finished.
 vocab <- check_vocabulary_integrity(vocab)
 save_vocabulary(vocab, VOCAB_PATH)
+
+# Record what this run actually produced, so the publishing workflow can refuse
+# to commit a degraded page. Written last, alongside the vocabulary, for the
+# same reason: an interrupted render leaves neither. index_html_bytes reads 0
+# here because pandoc has not written the file yet - the workflow fills it in
+# after rendering. See scripts/check-render.R.
+write_run_manifest(build_run_manifest(
+  n_responses                 = n_total,
+  produce_categories_reported = nrow(produce_freq),
+  store_categories_reported   = nrow(store_freq),
+  vocab                       = vocab,
+  classification_method       = CLASSIFICATION_METHOD,
+  events                      = classification_events()
+))
 ```

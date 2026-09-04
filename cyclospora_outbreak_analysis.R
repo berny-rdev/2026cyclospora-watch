@@ -38,7 +38,8 @@ source("R/text-normalize.R")       # normalize_punct, split_delims, is_negation,
 source("R/vocabulary-io.R")        # read/load/save vocabulary, stamp_category_provenance
 source("R/checklist.R")            # checklist_map + classify_checklist
 source("R/classify.R")             # regex + LLM classification, classify_and_grow
-source("R/stats.R")                # wilson_ci, add_wilson_ci
+source("R/stats.R")                 # wilson_ci, add_wilson_ci
+source("R/run-manifest.R")          # build/write run-manifest.json
 source("R/vocabulary-integrity.R") # assert_utf8_locale, check_vocabulary_integrity
 
 ## Matters most HERE: `Rscript` on macOS defaults to LC_CTYPE=C, which silently
