@@ -205,6 +205,39 @@ produce_freq <- produce_long %>%
   mutate(pct_of_cases = round(100 * n_cases / n_total, 1)) %>%
   add_wilson_ci(n_total)
 
+## HOW each report arrived, per category. A checklist count is what people were
+## ASKED about - a preset option they ticked. A free-text count is what they
+## volunteered unprompted. Those are different kinds of evidence and the page
+## previously showed them as one number: a food that only ever appears because
+## it was on the checklist reads very differently from one people wrote in
+## themselves, especially for a food that was added to the checklist partway
+## through.
+##
+## A single response can contribute BOTH (ticking "cilantro" and also writing
+## it in), so these two columns can sum to more than n_cases. Counted over
+## distinct responses per source so nobody is double-counted within a column.
+produce_source_split <- produce_long %>%
+  distinct(response_id, category, source_type) %>%
+  count(category, source_type, name = "n") %>%
+  tidyr::pivot_wider(names_from = source_type, values_from = n, values_fill = 0)
+
+for (col in c("checklist_direct", "freetext_classified")) {
+  if (!col %in% names(produce_source_split)) produce_source_split[[col]] <- 0L
+}
+
+produce_freq <- produce_freq %>%
+  left_join(produce_source_split, by = "category") %>%
+  mutate(across(c(checklist_direct, freetext_classified), ~ tidyr::replace_na(.x, 0L)))
+
+## Reported, but with no baseline_commonness, so produce_signal's
+## filter(!is.na(baseline_pct)) drops them and they never appear in the signal
+## table. That filter is correct - a ratio needs a denominator - but silently
+## losing half the reported foods is not, so they get their own table rather
+## than a sentence saying they exist somewhere.
+produce_unrankable <- produce_freq %>%
+  filter(is.na(unlist(vocab$baseline_commonness)[category])) %>%
+  arrange(desc(n_cases))
+
 store_freq <- store_long %>%
   distinct(response_id, category) %>%
   count(category, sort = TRUE, name = "n_cases") %>%
@@ -507,6 +540,7 @@ just the top 15 shown here).*
 produce_signal %>%
   transmute(
     category, n_cases, pct_of_cases, ci_low_pct, ci_high_pct,
+    checklist_direct, freetext_classified,
     baseline_pct,
     baseline_confidence = ifelse(baseline_confidence == "exact_match",
                                  "USDA ERS", "author estimate"),
@@ -516,10 +550,13 @@ produce_signal %>%
   datatable(
     rownames = FALSE,
     colnames = c("Food", "# cases", "% of cases", "CI low", "CI high",
+                 "via checklist", "via free text",
                  "Baseline % (used in ratio)", "Baseline source",
                  "ERS reference (not used in ratio)",
                  "Signal ratio", "Ratio CI low", "Ratio CI high"),
-    options = list(pageLength = 10, order = list(list(8, "desc")), scrollX = TRUE))
+    ## Sort by signal ratio, which is now column 10 (0-indexed) after the two
+    ## provenance columns were inserted ahead of it.
+    options = list(pageLength = 10, order = list(list(10, "desc")), scrollX = TRUE))
 ```
 
 *CI columns are a 95% confidence interval — small sample sizes mean wide
@@ -559,8 +596,47 @@ the other would change every ratio on this page for no reason but a change
 of units. Reconciling them properly is open work; until then both numbers
 are shown side by side so the gap is visible rather than hidden.
 
-Foods without any baseline at all don't appear in this table — they're still
-counted in *All produce mentioned* further down.
+### Reported, but not yet rankable
+
+```{r unrankable-note, results="asis"}
+cat(sprintf(
+"A signal ratio needs a denominator, so a food with no baseline can't appear in
+the table above. That's **%d of the %d foods reported so far** — not a rounding
+error, and previously they simply vanished from the page with nothing said. They
+are listed here instead.\n\n",
+nrow(produce_unrankable), nrow(produce_freq)))
+```
+
+```{r unrankable-table}
+produce_unrankable %>%
+  transmute(category, n_cases, pct_of_cases,
+            checklist_direct, freetext_classified) %>%
+  datatable(
+    rownames = FALSE,
+    colnames = c("Food", "# cases", "% of cases",
+                 "via checklist", "via free text"),
+    options = list(pageLength = 10, order = list(list(1, "desc")), scrollX = TRUE))
+```
+
+Two different reasons a food is on this list, and they need different fixes:
+
+- **Ordinary produce with no baseline yet** — `lettuce_unspecified`, onions,
+  grapes, cherries, apples and the like. These *could* be ranked; they just need
+  a "how often does a normal person eat this" number added to
+  `category_vocabulary.json`. Adding one moves the food straight into the table
+  above. `lettuce_unspecified` is the largest by some way, and the most worth
+  doing: it is lettuce whose **type** the checklist recorded but whose form it
+  didn't, so it is ordinary produce rather than an unrankable composite.
+- **Foods no per-capita figure can describe** — dishes and composites like
+  `tacos`, `sushi`, `beef_burger` or `veggie_tray`, and non-answers like
+  `no_specific_item`. There is no meaningful "percent of people who ate a taco
+  in a two-week window" to divide by, and inventing one would manufacture a
+  ranking rather than measure it. These stay here permanently, which is the
+  honest outcome, not a gap waiting to be filled.
+
+`lettuce_untyped` is deliberately on this list too: it held the obsolete flat
+baseline of 55 while its siblings divide by 10–20, which published a signal ratio
+of 0.04 for what is otherwise a real lead. Removing the baseline was the fix.
 
 ## Table 2: Cases by State (Full Data)
 
@@ -612,11 +688,22 @@ if (nrow(tally_data) > 0) {
 
 ## Table 6: All Produce Mentioned
 
+Every food reported, whether or not it can be ranked. The last two columns show
+**how** each report arrived — a preset option someone ticked, or something they
+wrote in themselves.
+
 ```{r produce-table}
-datatable(produce_freq, rownames = FALSE,
-          colnames = c("Food", "# cases", "% of cases", "CI low", "CI high"),
-          options = list(pageLength = 10))
+produce_freq %>%
+  transmute(category, n_cases, pct_of_cases, ci_low_pct, ci_high_pct,
+            checklist_direct, freetext_classified) %>%
+  datatable(rownames = FALSE,
+            colnames = c("Food", "# cases", "% of cases", "CI low", "CI high",
+                         "via checklist", "via free text"),
+            options = list(pageLength = 10, scrollX = TRUE))
 ```
+
+*A response can contribute to both columns — ticking "cilantro" on the checklist
+and also writing it in — so they can sum to more than the case count.*
 
 ## Table 7: Stores & Restaurants Mentioned
 
