@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-09-04T19:40:18Z",
+  "n_responses": 164,
+  "produce_categories_reported": 61,
+  "store_categories_reported": 127,
+  "produce_categories_known": 63,
+  "store_categories_known": 130,
+  "baselines_set": 29,
+  "classification_method": "llm",
+  "api_key_present": true,
+  "fallback_no_api_key": 0,
+  "fallback_batch_failed": 0,
+  "index_html_bytes": 2048596
+}
