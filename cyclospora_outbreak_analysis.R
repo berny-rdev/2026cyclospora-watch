@@ -27,6 +27,13 @@ if (length(new_pkgs)) install.packages(new_pkgs)
 library(googlesheets4); library(dplyr); library(tidyr); library(stringr)
 library(lubridate); library(ggplot2); library(janitor); library(purrr); library(knitr)
 
+## Shared vocabulary rules, sourced rather than duplicated into both entry
+## points. assert_utf8_locale() matters most HERE: `Rscript` on macOS defaults
+## to LC_CTYPE=C, which silently turns normalize_punct() into a no-op, so a
+## local run would fork a duplicate category off every curly apostrophe.
+source("R/vocabulary-integrity.R")
+assert_utf8_locale()
+
 ## ---- 1. CONFIG -- EDIT FOR YOUR FORM ----------------------------------
 
 SHEET_URL <- "https://docs.google.com/spreadsheets/d/1n1VJ99Ko7mvFQmKRX_QrFLFFziMAGKpkUNmK40QxLpU/edit?usp=sharing"
@@ -810,6 +817,9 @@ if ("high_confidence_meal" %in% names(df)) {
 write.csv(produce_freq, "produce_frequency.csv", row.names = FALSE)
 write.csv(store_freq, "store_frequency.csv", row.names = FALSE)
 write.csv(produce_signal, "produce_signal_ratio.csv", row.names = FALSE)
+## Checked here rather than next to stamp_category_provenance(), because that
+## runs before the store classification and cannot see categories minted by it.
+vocab <- check_vocabulary_integrity(vocab)
 save_vocabulary(vocab, VOCAB_PATH)
 
 cat("\nDone. Key file: produce_signal_ratio.csv - sort by signal_ratio descending for your current top leads.\n")

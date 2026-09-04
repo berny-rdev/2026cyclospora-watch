@@ -17,6 +17,13 @@ if (length(new_pkgs)) install.packages(new_pkgs)
 library(googlesheets4); library(dplyr); library(tidyr); library(stringr)
 library(lubridate); library(ggplot2); library(janitor); library(purrr)
 library(knitr); library(DT)
+
+## Shared vocabulary rules, sourced rather than duplicated into both entry
+## points. assert_utf8_locale() runs before any text is read: under a non-UTF-8
+## locale normalize_punct() silently does nothing, and every curly apostrophe
+## forks a duplicate category.
+source("R/vocabulary-integrity.R")
+assert_utf8_locale()
 ```
 
 ```{r config}
@@ -1058,5 +1065,11 @@ product lots — this page can't do that part.
 # written vocabulary behind with no corresponding page. save_vocabulary()
 # re-reads and merges before writing, so this is safe even if another run
 # has touched the file while this one was rendering.
+#
+# Integrity is checked HERE rather than next to stamp_category_provenance(),
+# because that runs before the store classification and so cannot see
+# categories minted by it. This is the only point where every route that can
+# add a category has finished.
+vocab <- check_vocabulary_integrity(vocab)
 save_vocabulary(vocab, VOCAB_PATH)
 ```
