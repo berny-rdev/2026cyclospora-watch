@@ -27,11 +27,22 @@ if (length(new_pkgs)) install.packages(new_pkgs)
 library(googlesheets4); library(dplyr); library(tidyr); library(stringr)
 library(lubridate); library(ggplot2); library(janitor); library(purrr); library(knitr)
 
-## Shared vocabulary rules, sourced rather than duplicated into both entry
-## points. assert_utf8_locale() matters most HERE: `Rscript` on macOS defaults
-## to LC_CTYPE=C, which silently turns normalize_punct() into a no-op, so a
-## local run would fork a duplicate category off every curly apostrophe.
-source("R/vocabulary-integrity.R")
+## Shared pipeline core, sourced by BOTH this script and index.Rmd. These
+## functions used to be maintained by hand in both files and had already
+## drifted apart: this script's classify_and_grow() never read the item maps,
+## so a local run re-classified every cached phrase from scratch and could
+## write answers that contradicted the ones the report had locked in. Sourcing
+## the one copy removes that whole class of divergence.
+source("R/text-normalize.R")       # normalize_punct, split_delims, is_negation, split_freetext
+source("R/vocabulary-io.R")        # read/load/save vocabulary, stamp_category_provenance
+source("R/checklist.R")            # checklist_map + classify_checklist
+source("R/classify.R")             # regex + LLM classification, classify_and_grow
+source("R/stats.R")                # wilson_ci, add_wilson_ci
+source("R/vocabulary-integrity.R") # assert_utf8_locale, check_vocabulary_integrity
+
+## Matters most HERE: `Rscript` on macOS defaults to LC_CTYPE=C, which silently
+## turns normalize_punct() into a no-op, so a local run would fork a duplicate
+## category off every curly apostrophe.
 assert_utf8_locale()
 
 ## ---- 1. CONFIG -- EDIT FOR YOUR FORM ----------------------------------
@@ -168,401 +179,8 @@ baseline_commonness_seed <- c(
 
 VOCAB_PATH <- "category_vocabulary.json"
 
-# Reads the vocabulary file, or returns NULL if it genuinely doesn't exist
-# yet (first run). A file that EXISTS but won't parse is a hard error: the
-# old behaviour returned NULL there, which silently rebuilt the vocabulary
-# from seed values and then overwrote every accumulated category, baseline
-# and cached classification with that skeleton.
-read_vocabulary_file <- function(path) {
-  if (!file.exists(path)) return(NULL)
-  tryCatch(
-    jsonlite::fromJSON(path, simplifyVector = TRUE),
-    error = function(e) {
-      stop(
-        path, " exists but could not be parsed: ", conditionMessage(e), "\n",
-        "  Refusing to continue. Proceeding would rebuild the vocabulary from seed\n",
-        "  values and overwrite every accumulated category, baseline and cached\n",
-        "  classification. Restore it with `git checkout -- ", path, "` or repair\n",
-        "  the file by hand, then re-run.",
-        call. = FALSE
-      )
-    }
-  )
-}
-
-# as.list() on a possibly-absent JSON field, without inventing a value.
-as_list_or_empty <- function(x) if (is.null(x)) list() else as.list(x)
-
-load_vocabulary <- function(path, seed_produce, seed_store, seed_baseline) {
-  v <- read_vocabulary_file(path)
-  list(
-    produce_categories = union(if (!is.null(v)) v$produce_categories else character(0), seed_produce),
-    store_categories   = union(if (!is.null(v)) v$store_categories else character(0), seed_store),
-    baseline_commonness = modifyList(
-      as.list(seed_baseline),
-      if (!is.null(v) && !is.null(v$baseline_commonness)) as.list(v$baseline_commonness) else list()
-    ),
-    # PROVENANCE for each baseline. Parallel maps rather than nesting inside
-    # baseline_commonness, because that field is read as a flat named vector
-    # by the signal-ratio code and changing its shape would break the metric.
-    baseline_source     = if (!is.null(v) && !is.null(v$baseline_source)) as.list(v$baseline_source) else list(),
-    baseline_confidence = if (!is.null(v) && !is.null(v$baseline_confidence)) as.list(v$baseline_confidence) else list(),
-    # CATEGORY provenance (distinct from the BASELINE provenance above).
-    # Must be loaded, not just carried over on save: stamp_category_provenance()
-    # below adds to these, and if they arrived empty the save-time merge would
-    # treat the partial in-memory copy as authoritative and drop the rest.
-    category_source_type      = if (!is.null(v) && !is.null(v$category_source_type)) as.list(v$category_source_type) else list(),
-    active_since_form_version = if (!is.null(v) && !is.null(v$active_since_form_version)) as.list(v$active_since_form_version) else list(),
-    checklist_label           = if (!is.null(v) && !is.null(v$checklist_label)) as.list(v$checklist_label) else list(),
-    category_notes            = if (!is.null(v) && !is.null(v$category_notes)) as.list(v$category_notes) else list()
-  )
-}
-
-## Stamps provenance on any category that lacks it.
-##
-## Deliberately here rather than inside classify_and_grow(): categories can
-## enter the vocabulary by several routes - the LLM minting a new one, the
-## checklist union, a hand edit to the file - and only a sweep catches all of
-## them. Existing labels are never overwritten, so this is purely additive and
-## self-healing. Without it the provenance fields go stale the first time
-## anyone reports a new food or store, which is exactly what happened to the
-## 16 categories added after the initial backfill.
-stamp_category_provenance <- function(vocab, checklist_categories = character(0)) {
-  allc <- c(vocab$produce_categories, vocab$store_categories)
-  for (cat in setdiff(allc, names(vocab$category_source_type))) {
-    vocab$category_source_type[[cat]] <-
-      if (cat %in% checklist_categories) "checklist_direct" else "freetext_classified"
-  }
-  for (cat in setdiff(allc, names(vocab$active_since_form_version))) {
-    vocab$active_since_form_version[[cat]] <- "v1"
-  }
-  vocab
-}
-
-# MERGE-ON-WRITE, not clobber-on-write.
-#
-# `vocab` is a snapshot taken when this run started. Another writer - the
-# hourly Action, or someone running the report locally - may have added
-# entries since. Serializing the snapshot over the whole file would silently
-# discard them, with no conflict, because a full-file overwrite always wins
-# a rebase.
-#
-# So: re-read the file we are about to replace and merge into it. That
-# matters especially here, because THIS script's load_vocabulary() does not
-# read produce_item_map / store_item_map at all - merging on write means it
-# can no longer destroy the caches it never loaded.
-save_vocabulary <- function(vocab, path) {
-  on_disk <- read_vocabulary_file(path)
-  merged <- vocab
-
-  if (!is.null(on_disk)) {
-    # Carry over any top-level key this function doesn't explicitly manage.
-    # Without this, a field added to the file (by hand, by a tool, or by a
-    # newer version of this script) is silently dropped the next time any
-    # run saves - which is exactly how the item maps used to get wiped.
-    for (k in setdiff(names(on_disk), names(merged))) merged[[k]] <- on_disk[[k]]
-
-    # Categories are additive - keep both sides.
-    merged$produce_categories <- union(vocab$produce_categories, on_disk$produce_categories)
-    merged$store_categories   <- union(vocab$store_categories,   on_disk$store_categories)
-
-    # For per-key maps, the on-disk value wins. modifyList(a, b) gives `b`
-    # precedence, so passing on_disk second means an entry already written
-    # by someone else survives, while genuinely new keys from this run are
-    # still added. On-disk decisions are the earlier, possibly already
-    # published ones, and neither script ever edits these in memory.
-    merged$baseline_commonness <- modifyList(
-      as_list_or_empty(vocab$baseline_commonness), as_list_or_empty(on_disk$baseline_commonness))
-    merged$produce_item_map <- modifyList(
-      as_list_or_empty(vocab$produce_item_map), as_list_or_empty(on_disk$produce_item_map))
-    merged$store_item_map <- modifyList(
-      as_list_or_empty(vocab$store_item_map), as_list_or_empty(on_disk$store_item_map))
-    merged$baseline_source <- modifyList(
-      as_list_or_empty(vocab$baseline_source), as_list_or_empty(on_disk$baseline_source))
-    merged$baseline_confidence <- modifyList(
-      as_list_or_empty(vocab$baseline_confidence), as_list_or_empty(on_disk$baseline_confidence))
-    # Same direction as the maps above: on-disk wins for keys both sides have,
-    # while categories stamped for the first time in this run are kept.
-    for (k in c("category_source_type", "active_since_form_version",
-                "checklist_label", "category_notes")) {
-      merged[[k]] <- modifyList(as_list_or_empty(vocab[[k]]), as_list_or_empty(on_disk[[k]]))
-    }
-  }
-
-  # ATOMIC WRITE. write_json() straight onto `path` leaves a truncated file
-  # if the process dies mid-write, and a truncated file is exactly what
-  # read_vocabulary_file() now refuses to load. Write to a tempfile in the
-  # SAME directory (so rename stays on one filesystem and is atomic), then
-  # rename over the target. A killed process can leave a stray temp file,
-  # but never a partial category_vocabulary.json.
-  tmp <- tempfile(pattern = ".category_vocabulary", tmpdir = dirname(path), fileext = ".json")
-  jsonlite::write_json(merged, tmp, auto_unbox = TRUE, pretty = TRUE)
-  if (!file.rename(tmp, path)) {
-    unlink(tmp)
-    stop("Could not atomically replace ", path, call. = FALSE)
-  }
-  invisible(merged)
-}
-
 vocab <- load_vocabulary(VOCAB_PATH, names(produce_dict_seed), names(store_dict_seed), baseline_commonness_seed)
 
-## Canonicalise typographic punctuation to ASCII before anything else reads
-## the string. Curly apostrophes were the single largest source of poisoned
-## categories (13 of 36) and the most likely trigger for LLM key-drift: a
-## phrase sent as a JSON key containing U+2019 can come back with U+0027,
-## the exact-name lookup misses, and the item falls to the regex fallback.
-## Applied at ingestion so tokenisation, caching and the API call all see
-## the same canonical form.
-normalize_punct <- function(x) {
-  x <- gsub("[‘’ʼ′´]", "'", x, perl = TRUE)
-  x <- gsub("[“”″]", '"', x, perl = TRUE)
-  x <- gsub("[‐‑‒–—]", "-", x, perl = TRUE)
-  x <- gsub(" ", " ", x, perl = TRUE)
-  x
-}
-
-## Split on , ; and newline - but NOT inside parentheses. Respondents write
-## "Agawam Diner (Rowley, MA); Campfire Grille (Bridgton, ME)", and a plain
-## comma split turned that one answer into three junk categories including
-## the fragments "Ma); Campfire Grille (Bridgton" and "Me)". Newlines matter
-## too: one response listed seven businesses on seven lines and produced a
-## single category containing all of them.
-split_delims <- function(s) {
-  if (is.na(s) || !nzchar(s)) return(character(0))
-  ch <- strsplit(s, "", fixed = TRUE)[[1]]
-  depth <- 0L; cur <- character(0); out <- character(0)
-  for (c in ch) {
-    if (c == "(") depth <- depth + 1L
-    else if (c == ")") depth <- max(0L, depth - 1L)
-    if (depth == 0L && (c == "," || c == ";" || c == "\n")) {
-      out <- c(out, paste0(cur, collapse = "")); cur <- character(0)
-    } else cur <- c(cur, c)
-  }
-  c(out, paste0(cur, collapse = ""))
-}
-
-## Declining to answer is not a food. Nine responses answer the produce
-## free-text with a negation; before this filter they reached the classifier
-## and could become categories like "No. I Made Sure To Not :(". Dropped
-## here means never classified and never cached. The \\b guards keep real
-## foods that merely start with these letters - "nopales", "nectarines".
-NEGATION_RE <- paste0(
-  "^(no|nope|none|nothing|n/?a|na|nil|never|not really|not that i|",
-  "i don'?t|i do not|unsure|unknown|idk|[-.–]+)\\b|^[-.–[:space:]]*$")
-is_negation <- function(item) {
-  it <- str_squish(str_to_lower(item))
-  !nzchar(it) | str_detect(it, NEGATION_RE)
-}
-
-split_freetext <- function(raw_text_vec) {
-  tibble(row_id = seq_along(raw_text_vec), raw = raw_text_vec) %>%
-    filter(!is.na(raw), str_trim(raw) != "") %>%
-    mutate(raw = normalize_punct(raw)) %>%
-    mutate(parts = map(raw, split_delims)) %>%
-    select(row_id, parts) %>%
-    unnest(parts) %>%
-    mutate(item = str_squish(str_to_lower(parts))) %>%
-    filter(item != "", !is_negation(item)) %>%
-    select(row_id, item)
-}
-
-## ---- CHECKLIST ROUTING ---------------------------------------------------
-## Checklist answers are preset option strings - already category-shaped and
-## unambiguous - so they resolve by direct lookup and never reach the LLM or
-## the regex fallback. That removes the whole class of drift for ~90% of the
-## reported volume, and leaves the classifier to do the one job it's needed
-## for: messy free text.
-CHECKLIST_MAP_PATH <- "checklist-mapping.json"
-
-checklist_map <- local({
-  if (!file.exists(CHECKLIST_MAP_PATH)) {
-    stop(CHECKLIST_MAP_PATH, " is missing - checklist answers cannot be routed. ",
-         "Refusing to fall back to the classifier, which would silently re-introduce ",
-         "drift on the highest-volume field.", call. = FALSE)
-  }
-  m <- jsonlite::fromJSON(CHECKLIST_MAP_PATH, simplifyVector = FALSE)$mapping
-  if (is.null(m) || length(m) == 0) stop(CHECKLIST_MAP_PATH, " has no 'mapping' object.", call. = FALSE)
-  m
-})
-
-## Resolves checklist text to categories. An option present in the form but
-## absent from the map is a hard error, not a guess - a new checklist option
-## must be mapped by hand or the counts silently lose it.
-classify_checklist <- function(raw_text_vec) {
-  long <- split_freetext(raw_text_vec)
-  if (nrow(long) == 0) return(long %>% mutate(category = character(0)))
-  unknown <- setdiff(unique(long$item), names(checklist_map))
-  if (length(unknown)) {
-    stop("checklist option(s) not present in ", CHECKLIST_MAP_PATH, ":\n  - ",
-         paste(unknown, collapse = "\n  - "),
-         "\n  Add them to the mapping (with the category slug they belong to) and re-run.",
-         call. = FALSE)
-  }
-  long %>% mutate(category = vapply(item, function(i) as.character(checklist_map[[i]]), character(1)))
-}
-
-
-regex_classify <- function(item, dict) {
-  hit <- names(dict)[map_lgl(dict, ~ str_detect(item, .x))]
-  # No seed pattern matched. Return NA rather than str_to_title(item):
-  # echoing the respondent's raw text back as a category name is how
-  # entries like "No. I Made Sure To Not :(" and "Bibb Lettuce Head"
-  # became permanent categories. NA means "undecided this run" - the
-  # item is left uncategorized and retried next run, when the LLM may
-  # well be reachable again.
-  if (length(hit) == 0) return(NA_character_)
-  hit[1]
-}
-
-# Categories only ever enter the vocabulary from a real decision.
-# NA means undecided, so it must never be unioned in.
-merge_categories <- function(known_categories, mapping) {
-  union(known_categories, unique(mapping[!is.na(mapping)]))
-}
-
-## Classifies DISTINCT raw items against a GROWING vocabulary: if an item
-## matches a category that already exists, it's reused; if it's genuinely
-## new, the LLM mints a new lowercase_snake_case category name instead of
-## defaulting to "other". Falls back to the regex seed dictionary (which
-## can't invent new categories, only title-case unmatched text) if the API
-## call fails for any reason - the pipeline never crashes either way.
-## Returns list(mapping = named vector item->category, vocab = updated
-## character vector of all known categories after this batch).
-classify_items_dynamic <- function(items, known_categories, dict, domain = c("produce", "store"), method = c("llm", "regex")) {
-  domain <- match.arg(domain)
-  method <- match.arg(method)
-  if (length(items) == 0) return(list(mapping = character(0), vocab = known_categories))
-
-  if (method == "regex") {
-    mapping <- setNames(map_chr(items, ~ regex_classify(.x, dict)), items)
-    return(list(mapping = mapping, vocab = merge_categories(known_categories, mapping)))
-  }
-
-  result <- call_claude_classify_dynamic(items, known_categories, domain = domain)
-  if (is.null(result) || length(result) == 0) {
-    warning("LLM classification failed - falling back to regex dictionary for this batch.")
-    mapping <- setNames(map_chr(items, ~ regex_classify(.x, dict)), items)
-    return(list(mapping = mapping, vocab = merge_categories(known_categories, mapping)))
-  }
-
-  mapping <- unlist(result)[items]
-  names(mapping) <- items
-  # normalize any category the LLM returns to lowercase_snake_case so
-  # "Purslane" and "purslane" don't become two different categories
-  mapping <- str_replace_all(str_to_lower(str_trim(mapping)), "[^a-z0-9]+", "_")
-  mapping <- str_replace_all(mapping, "^_|_$", "")
-  names(mapping) <- items
-  missing <- is.na(mapping) | mapping == ""
-  if (any(missing)) mapping[missing] <- map_chr(items[missing], ~ regex_classify(.x, dict))
-
-  list(mapping = mapping, vocab = merge_categories(known_categories, mapping))
-}
-
-call_claude_classify_dynamic <- function(items, known_categories, domain = c("produce", "store"),
-                                          api_key = Sys.getenv("ANTHROPIC_API_KEY"),
-                                          model = "claude-haiku-4-5-20251001") {
-  domain <- match.arg(domain)
-  if (identical(api_key, "")) {
-    warning("ANTHROPIC_API_KEY not set - falling back to regex classification.")
-    return(NULL)
-  }
-  if (length(items) == 0) return(NULL)
-
-  ## PRODUCE and STORE need opposite classification instincts:
-  ## - Produce: GENERALIZE. "romaine" and "bagged lettuce" should both
-  ##   become "lettuce" - that's the whole point of the category system.
-  ## - Store/restaurant: NEVER generalize into a business-type bucket like
-  ##   "regional_grocery" or "fast_casual" - that destroys the one thing
-  ##   that matters for a traceback (which SPECIFIC place was it). Only
-  ##   merge spelling/phrasing variants of the SAME named place.
-  domain_instructions <- if (domain == "produce") {
-    paste0(
-      "1. If it clearly matches an EXISTING category, use that EXACT category name - do not ",
-      "create a near-duplicate or synonym (e.g. don't make \"fresh_cilantro\" if \"cilantro\" ",
-      "already exists).\n",
-      "2. If it genuinely doesn't fit any existing category, invent ONE new concise category ",
-      "name in lowercase_snake_case (1-3 words, e.g. \"purslane\" or \"bean_sprouts\") that ",
-      "could sensibly apply to future similar items too. Do NOT use \"other\" - always pick or ",
-      "create a real, specific category.\n",
-      "3. If multiple items in this batch describe the same new food, give them the SAME new ",
-      "category name.\n"
-    )
-  } else {
-    paste0(
-      "1. Your ONLY job is to normalize SPELLING/PHRASING variants of the SAME specific named ",
-      "place into one category (e.g. \"Krogers\", \"the kroger on main\", \"kroger grocery\" all ",
-      "become \"kroger\"). If an EXISTING category is clearly the same specific place, use that ",
-      "EXACT category name.\n",
-      "2. NEVER invent a generic business-type category like \"regional_grocery\", ",
-      "\"casual_dining\", \"fast_casual\", \"grocery_store\", or \"local_restaurant\" - these hide ",
-      "the actual place and are USELESS for a foodborne illness traceback, which requires ",
-      "knowing exactly which specific establishment was involved.\n",
-      "3. If the item names any identifiable specific business, chain, or restaurant (even a ",
-      "small independent one you don't otherwise know), use a lowercase_snake_case version of ",
-      "THAT EXACT NAME as the category (e.g. \"harris_teeter\", \"joes_pizza_downtown\"). Do not ",
-      "abstract it into a category of business.\n",
-      "4. ONLY if the respondent's answer truly contains NO identifiable name at all (e.g. they ",
-      "wrote just \"a restaurant\" or \"the grocery store\" with zero distinguishing details) use ",
-      "exactly \"unspecified_restaurant\" or \"unspecified_grocery_store\" - do not invent any ",
-      "other generic bucket beyond these two exact fallback labels.\n"
-    )
-  }
-
-  prompt <- paste0(
-    "You are maintaining a GROWING category taxonomy for a citizen-science foodborne ",
-    "illness investigation. Respondents write vague, hedged, or typo'd free text (e.g. ",
-    "\"idk maybe romaine?\", \"bagged salad mix i think\").\n\n",
-    "Categories that ALREADY EXIST: ", paste(known_categories, collapse = ", "), "\n\n",
-    "For each item below:\n",
-    domain_instructions, "\n",
-    "Respond with ONLY a raw JSON object mapping each exact input item (as written, as the ",
-    "key) to its category (as the value). No prose, no markdown code fences.\n\nItems:\n",
-    paste0("- ", items, collapse = "\n")
-  )
-
-  resp <- tryCatch({
-    httr2::request("https://api.anthropic.com/v1/messages") %>%
-      httr2::req_headers(
-        "x-api-key" = api_key,
-        "anthropic-version" = "2023-06-01",
-        "content-type" = "application/json"
-      ) %>%
-      httr2::req_body_json(list(
-        model = model,
-        max_tokens = 4096,
-        messages = list(list(role = "user", content = prompt))
-      )) %>%
-      httr2::req_perform()
-  }, error = function(e) { warning("Claude API request failed: ", conditionMessage(e)); NULL })
-
-  if (is.null(resp)) return(NULL)
-
-  text_out <- httr2::resp_body_json(resp)$content[[1]]$text
-  text_out <- str_remove_all(text_out, "```json|```")
-  tryCatch(jsonlite::fromJSON(text_out), error = function(e) {
-    warning("Couldn't parse JSON back from Claude - falling back to regex classification.")
-    NULL
-  })
-}
-
-## Classifies free text AND grows the vocabulary in one step. Returns
-## list(long = long-format dataframe with categories, vocab = updated
-## character vector of categories to feed back into the vocabulary object).
-classify_and_grow <- function(raw_text_vec, known_categories, dict, domain = "produce", method = "llm") {
-  long <- split_freetext(raw_text_vec)
-  if (nrow(long) == 0) return(list(long = long %>% mutate(category = character(0)), vocab = known_categories))
-  distinct_items <- unique(long$item)
-  result <- classify_items_dynamic(distinct_items, known_categories, dict, domain = domain, method = method)
-  list(
-    # Undecided items drop out of this run's counts entirely rather than
-    # forming an NA category row in the frequency tables. The response
-    # still counts toward n_total; it just contributes no exposure.
-    long = long %>%
-      mutate(category = unname(result$mapping[item])) %>%
-      filter(!is.na(category)),
-    vocab = result$vocab
-  )
-}
 
 ## ---- 3. PULL + CLEAN DATA -------------------------------------------------
 
@@ -638,9 +256,10 @@ produce_checklist_long <- if (!is.null(produce_checklist_raw)) {
 
 ## FREE-TEXT PATH - unchanged: classify, grow the vocabulary, cache.
 produce_freetext_long <- if (!is.null(produce_freetext_raw)) {
-  r <- classify_and_grow(produce_freetext_raw, vocab$produce_categories,
+  r <- classify_and_grow(produce_freetext_raw, vocab$produce_categories, vocab$produce_item_map,
                          produce_dict_seed, domain = "produce", method = CLASSIFICATION_METHOD)
   vocab$produce_categories <- r$vocab
+  vocab$produce_item_map   <- r$item_map
   r$long %>% mutate(response_id = row_id, source_type = "freetext_classified", .keep = "unused")
 } else tibble()
 
@@ -654,9 +273,11 @@ vocab$produce_categories <- union(vocab$produce_categories,
 vocab <- stamp_category_provenance(vocab, unique(unlist(unname(checklist_map))))
 
 if ("shop_raw" %in% names(df)) {
-  store_result <- classify_and_grow(df$shop_raw, vocab$store_categories, store_dict_seed, domain = "store", method = CLASSIFICATION_METHOD)
+  store_result <- classify_and_grow(df$shop_raw, vocab$store_categories, vocab$store_item_map,
+                                    store_dict_seed, domain = "store", method = CLASSIFICATION_METHOD)
   store_long <- store_result$long %>% mutate(response_id = row_id, .keep = "unused")
   vocab$store_categories <- store_result$vocab
+  vocab$store_item_map   <- store_result$item_map
 } else {
   store_long <- tibble()
 }
@@ -680,21 +301,6 @@ if (length(categories_missing_baseline)) {
 ## and proportions near 0% or 100%, which is exactly the regime a young
 ## crowdsourced dataset lives in. Base R only, no extra package needed.
 
-wilson_ci <- function(x, n, conf_level = 0.95) {
-  if (n == 0) return(c(lower = NA_real_, upper = NA_real_))
-  p_hat <- x / n
-  z <- qnorm(1 - (1 - conf_level) / 2)
-  denom <- 1 + z^2 / n
-  center <- p_hat + z^2 / (2 * n)
-  adj <- z * sqrt((p_hat * (1 - p_hat) + z^2 / (4 * n)) / n)
-  c(lower = max(0, (center - adj) / denom), upper = min(1, (center + adj) / denom))
-}
-
-add_wilson_ci <- function(freq_df, n_total) {
-  ci <- purrr::map2_dfr(freq_df$n_cases, n_total, ~ as.list(wilson_ci(.x, .y)))
-  freq_df %>%
-    mutate(ci_low_pct = round(ci$lower * 100, 1), ci_high_pct = round(ci$upper * 100, 1))
-}
 
 produce_freq <- produce_long %>%
   distinct(response_id, category) %>%          # count each person once per food even if mentioned twice
