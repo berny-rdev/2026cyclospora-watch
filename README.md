@@ -50,14 +50,14 @@ Here is the link to view: https://berny-rdev.github.io/2026cyclospora-watch/inde
      per response), and it's a single batched call on Haiku - trivially
      cheap at Reddit-thread data volumes.
 
-3. **Push this repo to GitHub.**
+4. **Push this repo to GitHub.**
 
-4. **Turn on GitHub Pages:** repo Settings → Pages → Source: "Deploy from a
+5. **Turn on GitHub Pages:** repo Settings → Pages → Source: "Deploy from a
    branch" → Branch: `main`, folder: `/ (root)`. Your page will be live at
    `https://<your-username>.github.io/<repo-name>/index.html` within a few
    minutes of the first successful Action run.
 
-5. **Run the Action once manually** to check it works: repo → Actions tab →
+6. **Run the Action once manually** to check it works: repo → Actions tab →
    "Update Cyclospora Watch Page" → Run workflow. Check the logs if it
    fails — most common issue is a `col_map` question text that doesn't
    exactly match your form.
