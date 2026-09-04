@@ -23,6 +23,7 @@ library(knitr); library(DT)
 ## having to be applied twice and silently drifting when it isn't. What stays
 ## in this file is config (the sheet, the seeds, the column signatures) and
 ## presentation - the report's own tables, charts and prose.
+source("R/columns.R")               # match_columns
 source("R/text-normalize.R")       # normalize_punct, split_delims, is_negation, split_freetext
 source("R/vocabulary-io.R")        # read/load/save vocabulary, stamp_category_provenance
 source("R/checklist.R")            # checklist_map + classify_checklist
@@ -52,13 +53,11 @@ col_signatures <- c(
   onset_date       = "when did symptoms start"
 )
 
-match_columns <- function(actual_names, signatures) {
-  matched <- vapply(signatures, function(sig) {
-    hits <- actual_names[str_detect(str_to_lower(actual_names), str_to_lower(sig))]
-    if (length(hits) == 0) NA_character_ else hits[1]
-  }, character(1))
-  matched[!is.na(matched)]
-}
+## Without `consent` the filter that drops non-consenting responses is skipped
+## silently, so it is required rather than optional. Either produce column will
+## do, but with neither there is no exposure data to analyse.
+REQUIRED_COLUMNS    <- c("consent")
+REQUIRE_ANY_COLUMNS <- list(c("produce_checklist", "produce_other"))
 
 # Seed dictionaries - starting point + offline fallback only. The real,
 # growing vocabulary lives in category_vocabulary.json (see below).
@@ -123,7 +122,9 @@ CLASSIFICATION_METHOD <- "llm"   # "llm" or "regex"
 
 ```{r load-data}
 raw <- read_sheet(SHEET_URL)
-present_map <- match_columns(names(raw), col_signatures)
+present_map <- match_columns(names(raw), col_signatures,
+                              required = REQUIRED_COLUMNS,
+                              require_any = REQUIRE_ANY_COLUMNS)
 
 df <- raw %>%
   select(all_of(unname(present_map))) %>%

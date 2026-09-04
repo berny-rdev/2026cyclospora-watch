@@ -33,6 +33,7 @@ library(lubridate); library(ggplot2); library(janitor); library(purrr); library(
 ## so a local run re-classified every cached phrase from scratch and could
 ## write answers that contradicted the ones the report had locked in. Sourcing
 ## the one copy removes that whole class of divergence.
+source("R/columns.R")               # match_columns
 source("R/text-normalize.R")       # normalize_punct, split_delims, is_negation, split_freetext
 source("R/vocabulary-io.R")        # read/load/save vocabulary, stamp_category_provenance
 source("R/checklist.R")            # checklist_map + classify_checklist
@@ -70,13 +71,11 @@ col_signatures <- c(
   high_confidence_meal = "fairly confident caused this"
 )
 
-match_columns <- function(actual_names, signatures) {
-  matched <- vapply(signatures, function(sig) {
-    hits <- actual_names[str_detect(str_to_lower(actual_names), str_to_lower(sig))]
-    if (length(hits) == 0) NA_character_ else hits[1]
-  }, character(1))
-  matched[!is.na(matched)]
-}
+## Without `consent` the filter that drops non-consenting responses is skipped
+## silently, so it is required rather than optional. Either produce column will
+## do, but with neither there is no exposure data to analyse.
+REQUIRED_COLUMNS    <- c("consent")
+REQUIRE_ANY_COLUMNS <- list(c("produce_checklist", "produce_other"))
 
 ## ---- 2. SEED DICTIONARIES (starting point only, not a hard ceiling) ------
 ## These seed the category vocabulary on the very first run and double as
@@ -185,14 +184,11 @@ vocab <- load_vocabulary(VOCAB_PATH, names(produce_dict_seed), names(store_dict_
 ## ---- 3. PULL + CLEAN DATA -------------------------------------------------
 
 raw <- read_sheet(SHEET_URL)
-present_map <- match_columns(names(raw), col_signatures)
-missing_cols <- setdiff(names(col_signatures), names(present_map))
-if (length(missing_cols)) {
-  message("NOTE: these expected columns could not be matched by keyword and will be skipped:\n  - ",
-          paste(missing_cols, collapse = "\n  - "),
-          "\n  Actual column names in your sheet are:\n  - ",
-          paste(names(raw), collapse = "\n  - "))
-}
+present_map <- match_columns(names(raw), col_signatures,
+                              required = REQUIRED_COLUMNS,
+                              require_any = REQUIRE_ANY_COLUMNS)
+# (The "these columns could not be matched" note that used to sit here is now
+# inside match_columns(), so both entry points report it the same way.)
 
 df <- raw %>%
   select(all_of(unname(present_map))) %>%
