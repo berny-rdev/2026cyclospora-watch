@@ -333,7 +333,8 @@
     "taziki's": "tazikis",
     "tx": "unspecified_source",
     "agawam diner (rowley, ma)": "agawam_diner",
-    "campfire grille (bridgton, me)": "campfire_grille"
+    "campfire grille (bridgton, me)": "campfire_grille",
+    "walmart bagged lettuce": "walmart"
   },
   "baseline_source": {
     "apples": "author_estimate",
