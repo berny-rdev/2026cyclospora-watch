@@ -149,7 +149,11 @@
     "and jimmy john's (not salads)": "lettuce_unspecified",
     "trader joe's tabouli": "tabouli",
     "a sandwich that contained onions": "onions",
-    "pre-chopped/packaged": "no_specific_item"
+    "pre-chopped/packaged": "no_specific_item",
+    "the thing is i'm in italy right now at a conference. i simply cannot remember what i ate - i traveled to shanghai on the 19th of august": "no_specific_item",
+    "then to italy on the 26th. i suspect i either got it from something i ate before the 19th (onset time can be awhile, so not impossible) or at the mcdonald's i grabbed a burger at in the dubai airport on the 26th. obviously the dubai one is a bit of a stretch": "beef_burger",
+    "but apparently they get their bananas from south america so who knows": "bananas",
+    "perhaps they get their lettuce from mexico.": "lettuce_unspecified"
   },
   "store_item_map": {
     "kroger": "kroger",
