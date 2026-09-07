@@ -26,7 +26,8 @@ library(knitr); library(DT)
 source("R/columns.R")               # match_columns
 source("R/text-normalize.R")       # normalize_punct, split_delims, is_negation, split_freetext
 source("R/vocabulary-io.R")        # read/load/save vocabulary, stamp_category_provenance
-source("R/checklist.R")            # checklist_map + classify_checklist
+source("R/checklist.R")             # checklist_map + classify_checklist
+source("R/case-definition.R")       # classify_case_definition, case_definition_summary
 source("R/classify.R")             # regex + LLM classification, classify_and_grow
 source("R/stats.R")                 # wilson_ci, add_wilson_ci
 source("R/run-manifest.R")          # build/write run-manifest.json
@@ -139,6 +140,15 @@ if ("consent" %in% names(df)) {
 }
 
 n_total <- nrow(df)
+
+## How certain each respondent is that they have cyclospora. Collected since the
+## first response and read by nothing until now, which left the single most
+## important qualifier on the page invisible: most responses are self-suspected
+## rather than lab confirmed. Nothing is filtered on it - see the note on the
+## page for why - but the mix is now stated up front.
+case_def_summary <- if ("why_believe" %in% names(df)) {
+  case_definition_summary(df$why_believe, n_total)
+} else tibble(case_definition = character(), n_cases = integer(), pct_of_cases = numeric())
 
 duration_summary <- if ("duration" %in% names(df)) {
   df %>%
@@ -395,6 +405,40 @@ in the current multistate cyclospora outbreak — **not** an official CDC or
 state health department investigation. There is no control group, so results
 below are proportional reporting among people who got sick, not proof of cause.
 Treat this as "worth watching," not "confirmed."
+
+## How certain is it that these are cyclospora cases?
+
+```{r case-definition-note, results="asis"}
+if (nrow(case_def_summary) > 0) {
+  n_conf <- case_def_summary$n_cases[case_def_summary$case_definition == "Lab confirmed"]
+  p_conf <- case_def_summary$pct_of_cases[case_def_summary$case_definition == "Lab confirmed"]
+  n_self <- case_def_summary$n_cases[case_def_summary$case_definition == "Self-suspected"]
+  p_self <- case_def_summary$pct_of_cases[case_def_summary$case_definition == "Self-suspected"]
+  cat(sprintf(
+"The form asks everyone why they believe they have cyclospora. **%d of %d responses
+(%.1f%%) are lab confirmed.** Another **%d (%.1f%%) are self-suspected** — people
+who have the symptoms and think they have it, without a test.\n\n",
+    n_conf, n_total, p_conf, n_self, p_self))
+}
+```
+
+```{r case-definition-table}
+case_def_summary %>%
+  datatable(rownames = FALSE,
+            colnames = c("Case definition", "# responses", "% of responses"),
+            options = list(dom = "t", ordering = FALSE, pageLength = 10))
+```
+
+**Every number on this page is computed over all `r n_total` responses, including
+the self-suspected ones.** That is deliberate. Excluding them would discard most
+of the data and bias what remains toward whoever was able to get a stool test —
+which is a function of healthcare access, not of what someone ate. But it does
+mean the leads below describe a mostly self-diagnosed population, and that is a
+real limit on how far any of them should be pushed.
+
+*Free-text answers here are counted, never quoted — some mention unrelated
+medical conditions. "Unclassified" means an answer didn't clearly fit any tier,
+not that it was discarded.*
 
 ---
 

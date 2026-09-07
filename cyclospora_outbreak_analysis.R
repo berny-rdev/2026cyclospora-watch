@@ -36,7 +36,8 @@ library(lubridate); library(ggplot2); library(janitor); library(purrr); library(
 source("R/columns.R")               # match_columns
 source("R/text-normalize.R")       # normalize_punct, split_delims, is_negation, split_freetext
 source("R/vocabulary-io.R")        # read/load/save vocabulary, stamp_category_provenance
-source("R/checklist.R")            # checklist_map + classify_checklist
+source("R/checklist.R")             # checklist_map + classify_checklist
+source("R/case-definition.R")       # classify_case_definition, case_definition_summary
 source("R/classify.R")             # regex + LLM classification, classify_and_grow
 source("R/stats.R")                 # wilson_ci, add_wilson_ci
 source("R/run-manifest.R")          # build/write run-manifest.json
@@ -68,8 +69,10 @@ col_signatures <- c(
   produce_other    = "anything else you remember eating",
   shop_raw         = "shop.?dine",
   duration         = "how long did symptoms last",
-  onset_date       = "when did symptoms start",
-  high_confidence_meal = "fairly confident caused this"
+  onset_date       = "when did symptoms start"
+  # `high_confidence_meal = "fairly confident caused this"` was removed: the
+  # live form has never asked that question, so it matched nothing and made
+  # match_columns() warn about a missing optional column on every single run.
 )
 
 ## Without `consent` the filter that drops non-consenting responses is skipped
@@ -396,23 +399,28 @@ if ("onset_date" %in% names(df)) {
   }
 }
 
-## ---- 7b. HIGH-CONFIDENCE INDIVIDUAL REPORTS (anecdotal, NOT aggregated) ---
-## A small number of people may have strong, specific recall about what
-## caused their illness. These are valuable as human-readable leads for
-## whoever's investigating, but must NEVER be folded into the aggregate
-## signal-ratio math above - one confident person's guess shouldn't move
-## a population-level statistic. Kept as a raw, unclassified list instead.
+## ---- 7b. CASE DEFINITION --------------------------------------------------
+## Replaces the old "high-confidence individual reports" section, which read a
+## `high_confidence_meal` column keyed to a "fairly confident caused this"
+## question. The live form has never asked it - none of the sheet's ten headers
+## match - so that section had never run against real data.
+##
+## What the form DOES ask is why the respondent believes they have cyclospora,
+## and that answer was collected from the first response and read by nothing.
+## It is the most important qualifier on the whole analysis: most reports are
+## self-suspected rather than lab confirmed, and every count below is computed
+## over that mixed population.
+##
+## Nothing is filtered on it. Excluding self-suspected cases would discard most
+## of the data and bias what remains toward whoever could obtain a stool test,
+## which tracks healthcare access rather than exposure.
 
-if ("high_confidence_meal" %in% names(df)) {
-  high_confidence_reports <- df %>%
-    filter(!is.na(high_confidence_meal), str_trim(as.character(high_confidence_meal)) != "") %>%
-    select(any_of(c("state", "onset_date", "high_confidence_meal")))
-
-  if (nrow(high_confidence_reports) > 0) {
-    cat("\n===== HIGH-CONFIDENCE INDIVIDUAL REPORTS (anecdotal - not part of aggregate stats) =====\n")
-    print(kable(high_confidence_reports, caption = "Individual high-confidence suspected meals"))
-    write.csv(high_confidence_reports, "high_confidence_reports.csv", row.names = FALSE)
-  }
+if ("why_believe" %in% names(df)) {
+  case_def_summary <- case_definition_summary(df$why_believe, n_total)
+  cat("\n===== CASE DEFINITION (all responses are included in the stats above) =====\n")
+  print(kable(case_def_summary,
+              caption = "How certain respondents are that they have cyclospora"))
+  write.csv(case_def_summary, "case_definition_summary.csv", row.names = FALSE)
 }
 
 ## ---- 8. SAVE OUTPUTS -----------------------------------------------------
