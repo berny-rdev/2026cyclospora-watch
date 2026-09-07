@@ -30,6 +30,8 @@ source("R/checklist.R")             # checklist_map + classify_checklist
 source("R/case-definition.R")       # classify_case_definition, case_definition_summary
 source("R/classify.R")             # regex + LLM classification, classify_and_grow
 source("R/stats.R")                 # wilson_ci, add_wilson_ci
+source("R/external-baselines.R")    # ers_reference (USDA ERS display column)
+source("R/geo.R")                   # normalize_state
 source("R/run-manifest.R")          # build/write run-manifest.json
 source("R/vocabulary-integrity.R") # assert_utf8_locale, check_vocabulary_integrity
 
@@ -254,26 +256,6 @@ store_freq <- store_long %>%
   mutate(pct_of_cases = round(100 * n_cases / n_total, 1)) %>%
   add_wilson_ci(n_total)
 
-## External reference baselines from USDA ERS, for DISPLAY ONLY. These are
-## never fed into signal_ratio: ERS publishes pounds of per-capita
-## availability per year, while baseline_commonness is a 0-100 "percent of
-## people who ate this in a two-week period" scale. The two are not
-## convertible, so showing both side by side is honest and substituting one
-## for the other would not be. Reconciling the units is future work.
-EXTERNAL_BASELINES_PATH <- "baselines-external.json"
-
-external_baselines <- if (file.exists(EXTERNAL_BASELINES_PATH)) {
-  eb <- tryCatch(jsonlite::fromJSON(EXTERNAL_BASELINES_PATH, simplifyVector = FALSE),
-                 error = function(e) NULL)
-  if (is.null(eb$baselines)) list() else eb$baselines
-} else list()
-
-ers_reference <- function(cat) {
-  e <- external_baselines[[cat]]
-  if (is.null(e) || is.null(e$value_lb_per_year)) return(NA_character_)
-  sprintf("%.1f lb/yr (%s)", e$value_lb_per_year, e$source_year)
-}
-
 produce_signal <- produce_freq %>%
   mutate(baseline_pct = unlist(vocab$baseline_commonness)[category]) %>%
   filter(!is.na(baseline_pct)) %>%
@@ -312,18 +294,6 @@ n_estimated   <- sum(produce_signal$baseline_confidence == "unsourced")
 ## the bottom) - centralizing this here means the chart and its table can
 ## never disagree, and moving chunks around the page later won't break
 ## anything since both draw from these same precomputed objects.
-
-# --- US state counts ---
-normalize_state <- function(x) {
-  x <- str_trim(x)
-  full_match <- state.name[match(str_to_title(x), state.name)]
-  abbr_match <- state.name[match(str_to_upper(x), state.abb)]
-  dc_match <- ifelse(
-    str_to_lower(x) %in% c("dc", "washington dc", "washington, dc", "district of columbia"),
-    "District of Columbia", NA_character_
-  )
-  coalesce(full_match, abbr_match, dc_match)
-}
 
 state_counts <- if ("state" %in% names(df)) {
   df %>%

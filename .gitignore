@@ -29,11 +29,15 @@ renv/staging/
 produce_frequency.csv
 store_frequency.csv
 produce_signal_ratio.csv
+produce_unrankable.csv
+state_counts.csv
+case_definition_summary.csv
 duration_summary.csv
 epi_curve_data.csv
-high_confidence_reports.csv
 uncategorized_produce_to_review.csv
 uncategorized_stores_to_review.csv
+# high_confidence_reports.csv was written by the old section 7b, which read a
+# form question that never existed. Section and output both removed.
 produce_signal.png
 epi_curve.png
 

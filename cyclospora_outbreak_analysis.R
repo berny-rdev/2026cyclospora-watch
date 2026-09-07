@@ -40,6 +40,8 @@ source("R/checklist.R")             # checklist_map + classify_checklist
 source("R/case-definition.R")       # classify_case_definition, case_definition_summary
 source("R/classify.R")             # regex + LLM classification, classify_and_grow
 source("R/stats.R")                 # wilson_ci, add_wilson_ci
+source("R/external-baselines.R")    # ers_reference (USDA ERS display column)
+source("R/geo.R")                   # normalize_state
 source("R/run-manifest.R")          # build/write run-manifest.json
 source("R/vocabulary-integrity.R") # assert_utf8_locale, check_vocabulary_integrity
 
@@ -308,6 +310,31 @@ produce_freq <- produce_long %>%
   mutate(pct_of_cases = round(100 * n_cases / n_total, 1)) %>%
   add_wilson_ci(n_total)
 
+## HOW each report arrived: a preset checklist option someone ticked, or text
+## they wrote in themselves. Different kinds of evidence, and the published page
+## shows them separately, so the CSV does too. A response can contribute to both
+## (ticking "cilantro" and also writing it in), so these can sum to more than
+## n_cases.
+produce_source_split <- produce_long %>%
+  distinct(response_id, category, source_type) %>%
+  count(category, source_type, name = "n") %>%
+  tidyr::pivot_wider(names_from = source_type, values_from = n, values_fill = 0)
+
+for (col in c("checklist_direct", "freetext_classified")) {
+  if (!col %in% names(produce_source_split)) produce_source_split[[col]] <- 0L
+}
+
+produce_freq <- produce_freq %>%
+  left_join(produce_source_split, by = "category") %>%
+  mutate(across(c(checklist_direct, freetext_classified), ~ tidyr::replace_na(.x, 0L)))
+
+## Reported foods with no baseline_commonness. produce_signal drops these,
+## correctly - a ratio needs a denominator - but that is roughly half the
+## reported foods, so they are written out rather than silently lost.
+produce_unrankable <- produce_freq %>%
+  filter(is.na(unlist(vocab$baseline_commonness)[category])) %>%
+  arrange(desc(n_cases))
+
 store_freq <- store_long %>%
   distinct(response_id, category) %>%
   count(category, sort = TRUE, name = "n_cases") %>%
@@ -337,7 +364,21 @@ produce_signal <- produce_freq %>%
   mutate(
     signal_ratio = round(pct_of_cases / baseline_pct, 2),
     signal_ratio_low = round(ci_low_pct / baseline_pct, 2),
-    signal_ratio_high = round(ci_high_pct / baseline_pct, 2)
+    signal_ratio_high = round(ci_high_pct / baseline_pct, 2),
+    ## Where the denominator came from, and the ERS figure alongside it. Without
+    ## these the CSV gives a ratio with no way to tell a sourced baseline from a
+    ## guess, which is exactly the distinction the page is careful to draw.
+    baseline_confidence = vapply(category, function(c) {
+      v <- vocab$baseline_confidence[[c]]; if (is.null(v)) "unsourced" else as.character(v)
+    }, character(1)),
+    ers_ref = vapply(category, ers_reference, character(1)),
+    ## Flat +/-30% sensitivity on author-estimated baselines only, propagated
+    ## through the ratio. The baseline is the DENOMINATOR, so a larger baseline
+    ## gives a smaller ratio - hence the inversion.
+    baseline_sens_low  = ifelse(baseline_confidence == "unsourced",
+                                round(pct_of_cases / (baseline_pct * 1.3), 2), NA_real_),
+    baseline_sens_high = ifelse(baseline_confidence == "unsourced",
+                                round(pct_of_cases / (baseline_pct * 0.7), 2), NA_real_)
   ) %>%
   # Sort by the CONSERVATIVE (lower-bound CI) ratio, not the raw point
   # estimate - this is the "likely causality" ranking a real epi
@@ -425,9 +466,24 @@ if ("why_believe" %in% names(df)) {
 
 ## ---- 8. SAVE OUTPUTS -----------------------------------------------------
 
+## Respondents type states every way there is - "CA", "california", "Washington
+## DC" - so these are folded to one canonical name before counting. This script
+## produced no geography output at all before; the published page has had a
+## state map throughout, which is precisely the kind of divergence that made a
+## local run a poor check on the live page.
+state_counts <- if ("state" %in% names(df)) {
+  df %>%
+    mutate(state = normalize_state(state)) %>%
+    filter(!is.na(state)) %>%
+    count(state, name = "n_cases") %>%
+    arrange(desc(n_cases))
+} else tibble()
+
 write.csv(produce_freq, "produce_frequency.csv", row.names = FALSE)
 write.csv(store_freq, "store_frequency.csv", row.names = FALSE)
 write.csv(produce_signal, "produce_signal_ratio.csv", row.names = FALSE)
+write.csv(produce_unrankable, "produce_unrankable.csv", row.names = FALSE)
+if (nrow(state_counts) > 0) write.csv(state_counts, "state_counts.csv", row.names = FALSE)
 ## Checked here rather than next to stamp_category_provenance(), because that
 ## runs before the store classification and cannot see categories minted by it.
 vocab <- check_vocabulary_integrity(vocab)
