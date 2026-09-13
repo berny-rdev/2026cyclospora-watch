@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-13T01:05:15Z",
-  "n_responses": 166,
+  "generated_at": "2026-09-13T06:16:04Z",
+  "n_responses": 167,
   "produce_categories_reported": 61,
   "store_categories_reported": 127,
   "produce_categories_known": 63,
@@ -10,5 +10,5 @@
   "api_key_present": true,
   "fallback_no_api_key": 0,
   "fallback_batch_failed": 0,
-  "index_html_bytes": 2060722
+  "index_html_bytes": 2059903
 }
