@@ -652,7 +652,8 @@
     "freddys": "freetext_classified",
     "tazikis": "freetext_classified",
     "agawam_diner": "freetext_classified",
-    "campfire_grille": "freetext_classified"
+    "campfire_grille": "freetext_classified",
+    "cleveland_clinic_main_campus_cafeteria": "freetext_classified"
   },
   "active_since_form_version": {
     "apples": "v1",
@@ -847,7 +848,8 @@
     "freddys": "v1",
     "tazikis": "v1",
     "agawam_diner": "v1",
-    "campfire_grille": "v1"
+    "campfire_grille": "v1",
+    "cleveland_clinic_main_campus_cafeteria": "v1"
   },
   "checklist_label": {
     "avocado": "avocado",
